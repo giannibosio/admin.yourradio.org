@@ -1,0 +1,21 @@
+# Configurazione locale
+config.php
+
+# Logs
+logs/
+*.log
+
+# File temporanei
+*.tmp
+*.cache
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+

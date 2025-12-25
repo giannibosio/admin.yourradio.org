@@ -1,0 +1,48 @@
+# YourRadio API - Apache Configuration
+
+# Abilita il rewrite engine
+RewriteEngine On
+
+# Base path per le API
+RewriteBase /api/
+
+# Gestione CORS
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+# Routing per le API
+# Se il file o directory richiesto non esiste, passa tutto a index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Protezione file di configurazione
+<FilesMatch "^(config\.php|database\.php|functions\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Abilita PHP
+<IfModule mod_php7.c>
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_value error_log logs/error.log
+</IfModule>
+
+# Compressione GZIP
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/xml
+</IfModule>
+
+# Cache headers per JSON
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
+
