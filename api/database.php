@@ -344,10 +344,54 @@ class Songs extends DB
     
     public static function selectAllFormatsAll()
     {
-        $query = "SELECT * FROM `format` ORDER BY `frmt_nome`";
-        $st = self::$db->prepare($query);
-        $st->execute();
-        return $st->fetchAll();
+        try {
+            // Prima recupera tutti i format con tutti i campi necessari
+            $query = "SELECT * FROM `format` ORDER BY `frmt_nome`";
+            $st = self::$db->prepare($query);
+            if (!$st) {
+                $errorInfo = self::$db->errorInfo();
+                error_log("Errore preparazione query selectAllFormatsAll: " . $errorInfo[2]);
+                return array();
+            }
+            
+            $result = $st->execute();
+            if (!$result) {
+                $errorInfo = $st->errorInfo();
+                error_log("Errore esecuzione query selectAllFormatsAll: " . $errorInfo[2]);
+                return array();
+            }
+            
+            $formats = $st->fetchAll();
+            
+            // Per ogni format, conta le song associate
+            if (is_array($formats)) {
+                foreach ($formats as $key => $format) {
+                    $formatId = $format['frmt_id'];
+                    
+                    // Conta le song per questo format
+                    $countQuery = "SELECT COUNT(DISTINCT id_song) as count FROM `song_format` WHERE `id_format` = :format_id";
+                    $countSt = self::$db->prepare($countQuery);
+                    if ($countSt) {
+                        $countSt->execute(array(':format_id' => $formatId));
+                        $countResult = $countSt->fetch();
+                        $formats[$key]['songs_count'] = isset($countResult['count']) ? (int)$countResult['count'] : 0;
+                    } else {
+                        $formats[$key]['songs_count'] = 0;
+                    }
+                    
+                    // Assicurati che i campi siano sempre presenti
+                    $formats[$key]['frmt_descrizione'] = isset($format['frmt_descrizione']) ? $format['frmt_descrizione'] : '';
+                    $formats[$key]['frmt_permettiRipetizioneArtista'] = isset($format['frmt_permettiRipetizioneArtista']) ? $format['frmt_permettiRipetizioneArtista'] : 0;
+                }
+            } else {
+                $formats = array();
+            }
+            
+            return $formats;
+        } catch (Exception $e) {
+            error_log("Eccezione in selectAllFormatsAll: " . $e->getMessage());
+            return array();
+        }
     }
     
     public static function getSongFormats($songId)

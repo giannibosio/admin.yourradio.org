@@ -9,99 +9,92 @@ if(!isset($_SESSION["nome"])){
 
 include_once('inc/head.php');
 
-$tableId = 1;
-$tableName = 'tutti';
-
-$tables = '';
 $scripts = '';
-
-$tables.='
-<!-- table '.$tableId.' --> 
-<div class="card shadow mb-6">
-<div class="card-body">
-<!-- table -->
-<table class="table datatables display table-sm table-format" id="dataTable-'.$tableId.'" style="width:100%">
-<thead>
-<tr>
-<th>NOME</th>
-<th class="toHide">ATTIVO</th>
-
-</tr>
-</thead>
-<tfoot>
-<tr>
-<th>NOME</th>
-<th class="toHide">ATTIVO</th>
-
-</tr>
-</tfoot>
-</table>
-</div>
-</div>
-<!-- //table '.$tableId.' --> 
-';
+$cards = '';
 
 $scripts.='
 $(document).ready(function() {
-
-  var activeColumn = 1;
-  var table=$("#dataTable-'.$tableId.'").DataTable( {
-
-    "ajax": {
-      "url": "https://yourradio.org/api/formats?all=1",
-      "dataSrc": "data"
+  // Carica i format dall\'API e crea le card
+  $.ajax({
+    url: "https://yourradio.org/api/formats?all=1",
+    method: "GET",
+    dataType: "json",
+    cache: false,
+    success: function(response) {
+      if(response.success && response.data) {
+        var $container = $("#format-cards-container");
+        $container.empty();
+        
+        // Ordina i format per nome
+        var formats = response.data.sort(function(a, b) {
+          var nomeA = (a.frmt_nome || \'\').toUpperCase();
+          var nomeB = (b.frmt_nome || \'\').toUpperCase();
+          if (nomeA < nomeB) return -1;
+          if (nomeA > nomeB) return 1;
+          return 0;
+        });
+        
+        formats.forEach(function(format) {
+          var formatId = format.frmt_id || \'\';
+          var formatNome = format.frmt_nome || \'Format #\' + formatId;
+          var formatDescrizione = format.frmt_descrizione || \'\';
+          var formatPermettiRipetizione = format.frmt_permettiRipetizioneArtista || 0;
+          var songsCount = format.songs_count || 0;
+          var active = format.frmt_active || 0;
+          
+          // Determina il colore della card:
+          // - Rosso (danger) se attivo ma songs = 0
+          // - Verde (success) se attivo e songs > 0
+          // - Grigio (secondary) se inattivo
+          var bgClass;
+          if (active == 1 && songsCount == 0) {
+            bgClass = \'bg-danger\';
+          } else if (active == 1 && songsCount > 0) {
+            bgClass = \'bg-success\';
+          } else {
+            bgClass = \'bg-secondary\';
+          }
+          
+          var textClass = \'text-dark\'; // Testi neri
+          
+          var cardHtml = \'<div class="col-md-6 col-xl-3 mb-4">\' +
+            \'<div class="card shadow \' + bgClass + \' \' + textClass + \'">\' +
+            \'<div class="card-body" style="cursor:pointer;" onclick="window.location = \\\'format-scheda.php?id=\' + formatId + \'\\\';">\' +
+            \'<div class="row align-items-center">\' +
+            \'<div class="col pr-0">\' +
+            \'<p class="h5 \' + textClass + \' mb-0">\' + formatNome.toUpperCase() + \'</p>\';
+          
+          if (formatDescrizione) {
+            cardHtml += \'<span class="h6 small \' + textClass + \' d-block mt-1">\' + formatDescrizione + \'</span>\';
+          }
+          
+          // Se format è attivo ma songs = 0, mostra in nero e grassetto
+          // Altrimenti testo normale
+          var songsTextClass = (active == 1 && songsCount == 0) ? \'text-dark font-weight-bold\' : textClass;
+          cardHtml += \'<span class="h3 small \' + songsTextClass + \' d-block mt-2">\' + songsCount + \' songs</span>\';
+          
+          var ripetizioneText = formatPermettiRipetizione == 1 ? \'SI\' : \'NO\';
+          cardHtml += \'<span class="h6 small \' + textClass + \' d-block">Ripetizione artista: \' + ripetizioneText + \'</span>\';
+          
+          cardHtml += \'</div>\' +
+            \'</div>\' +
+            \'</div>\' +
+            \'</div>\' +
+            \'</div>\';
+          
+          $container.append(cardHtml);
+        });
+      }
     },
-    "columns": [
-    { "data": "frmt_nome" },
-    { "data": "frmt_active" },
+    error: function(xhr, status, error) {
+      console.error("Errore nel caricamento format:", error, xhr);
+      $("#format-cards-container").html(\'<div class="col-12"><div class="alert alert-danger">Errore nel caricamento dei format</div></div>\');
+    }
+  });
+});
+';
 
-    ],
-    "rowId": "frmt_id",
-    "ordering": true,
-    "columnDefs": [
-    { "visible": false, "targets": activeColumn }
-    ],
-
-    "order": [[ 0, "asc" ]],
-
-    "drawCallback": function ( settings ) {
-      var api = this.api();
-      var rows = api.rows( {page:"current"} ).nodes();
-      var last=null;
-
-
-      },
-
-      "rowCallback": function( row, data ) {
-
-       $(row).addClass("rowPingMonitor");
-       $("td:eq(0)",row).addClass("tdNome");
-       $("td:eq(1)",row).addClass("toHide");
-
-       if(data.frmt_active==1){
-          $(row).addClass("pingMonitorGreen");
-        }else{
-          $(row).addClass("pingMonitorRed");
-        }
-
-
-        },
-
-        "paging":   false,
-        "info":     true,
-        "searching": true
-        } );
-
-        $("body").on("click", "#dataTable-1 tbody tr", function(){
-          var id=$(this).attr("id");
-          console.log("Apro scheda "+id);
-          window.open("format-scheda.php?id="+id,"_self");
-          });
-
-          } );
-
-          ';
-          ?>
+?>
           <body class="horizontal dark">
             <div class="wrapper">
               <?php include_once('inc/menu-h.php'); ?>
@@ -110,7 +103,7 @@ $(document).ready(function() {
                   <div class="row justify-content-center">
                     <div class="col-12">
                       <div class="row">
-                        <!-- Small table -->
+                        <!-- Format cards -->
                         <div class="col-md-12 my-4 monitor-table">
                           <div class="row align-items-center mb-4">
                             <div class="col">
@@ -124,7 +117,14 @@ $(document).ready(function() {
                               <button class="btn btn-outline-secondary back-lista" onclick="window.open('format-scheda.php?id=nuova','_self');"><span class="fe fe-plus fe-16"></span> Nuovo</button>
                             </div>
                           </div>
-                          <?=$tables?>
+                          <div class="row" id="format-cards-container">
+                            <!-- Le card verranno caricate dinamicamente via JavaScript -->
+                            <div class="col-12 text-center">
+                              <div class="spinner-border text-primary" role="status">
+                                <span class="sr-only">Caricamento...</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div> <!-- .col-12 -->
@@ -144,11 +144,6 @@ $(document).ready(function() {
             <script src='js/jquery.stickOnScroll.js'></script>
             <script src="js/tinycolor-min.js"></script>
             <script src="js/config.js"></script>
-
-            <script src='js/jquery.dataTables.min.js'></script>
-            <script src='js/dataTables.bootstrap4.min.js'></script>
-            <script src='https://cdn.datatables.net/buttons/1.6.5/js/dataTables.buttons.min.js'></script>
-            <script src='https://cdn.datatables.net/buttons/1.6.5/js/buttons.colVis.min.js'></script>
 
             <script>
              <?=$scripts?>
@@ -170,4 +165,3 @@ $(document).ready(function() {
           </body>
 
         </html>
-

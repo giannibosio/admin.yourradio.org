@@ -119,13 +119,22 @@ try {
             
         case 'formats':
             if ($requestMethod === 'GET') {
-                // Se c'è un parametro 'all', restituisce tutti i format, altrimenti solo quelli attivi
-                if (isset($_GET['all']) && $_GET['all'] == '1') {
-                    $formats = Songs::selectAllFormatsAll();
-                } else {
-                    $formats = Songs::selectAllFormats();
+                try {
+                    // Se c'è un parametro 'all', restituisce tutti i format, altrimenti solo quelli attivi
+                    if (isset($_GET['all']) && $_GET['all'] == '1') {
+                        $formats = Songs::selectAllFormatsAll();
+                    } else {
+                        $formats = Songs::selectAllFormats();
+                    }
+                    
+                    if ($formats === false || $formats === null) {
+                        sendErrorResponse("Errore nel recupero dei format", 500);
+                    } else {
+                        sendSuccessResponse($formats);
+                    }
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore: " . $e->getMessage(), 500);
                 }
-                sendSuccessResponse($formats);
             } else {
                 sendErrorResponse("Method not allowed", 405);
             }
