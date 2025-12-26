@@ -79,7 +79,34 @@ try {
             
         case 'songs':
             require_once __DIR__ . '/endpoints/songs.php';
-            handleSongsRequest($requestMethod, $action, $id, $requestData);
+            // Gestione filtri nella sessione
+            if ($action === 'filters') {
+                // Avvia la sessione se non è già avviata
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+                
+                if ($requestMethod === 'GET') {
+                    // Recupera i filtri dalla sessione
+                    $filters = isset($_SESSION['songs_filters']) ? $_SESSION['songs_filters'] : array();
+                    error_log("GET /api/songs/filters - Filtri recuperati: " . print_r($filters, true));
+                    sendSuccessResponse($filters);
+                } elseif ($requestMethod === 'POST' || $requestMethod === 'PUT') {
+                    // Salva i filtri nella sessione
+                    error_log("POST/PUT /api/songs/filters - Dati ricevuti: " . print_r($requestData, true));
+                    $_SESSION['songs_filters'] = $requestData;
+                    error_log("POST/PUT /api/songs/filters - Filtri salvati in sessione: " . print_r($_SESSION['songs_filters'], true));
+                    sendSuccessResponse($requestData, "Filtri salvati con successo");
+                } elseif ($requestMethod === 'DELETE') {
+                    // Rimuovi i filtri dalla sessione
+                    unset($_SESSION['songs_filters']);
+                    sendSuccessResponse(array(), "Filtri rimossi con successo");
+                } else {
+                    sendErrorResponse("Method not allowed", 405);
+                }
+            } else {
+                handleSongsRequest($requestMethod, $action, $id, $requestData);
+            }
             break;
             
         case 'players':

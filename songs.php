@@ -7,6 +7,36 @@ if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
 
+// Gestione salvataggio/recupero filtri nella sessione PHP
+if (isset($_GET['action'])) {
+  if ($_GET['action'] === 'saveFilters') {
+    // Salva i filtri nella sessione
+    $rawInput = file_get_contents('php://input');
+    $filters = json_decode($rawInput, true);
+    if (is_array($filters)) {
+      $_SESSION['songs_filters'] = $filters;
+      header('Content-Type: application/json');
+      echo json_encode(array('success' => true, 'data' => $filters, 'message' => 'Filtri salvati con successo'));
+      exit;
+    } else {
+      header('Content-Type: application/json');
+      echo json_encode(array('success' => false, 'error' => 'Dati non validi'));
+      exit;
+    }
+  } elseif ($_GET['action'] === 'getFilters') {
+    // Recupera i filtri dalla sessione
+    $filters = isset($_SESSION['songs_filters']) ? $_SESSION['songs_filters'] : array();
+    header('Content-Type: application/json');
+    echo json_encode(array('success' => true, 'data' => $filters));
+    exit;
+  } elseif ($_GET['action'] === 'clearFilters') {
+    // Rimuovi i filtri dalla sessione
+    unset($_SESSION['songs_filters']);
+    header('Content-Type: application/json');
+    echo json_encode(array('success' => true, 'data' => array(), 'message' => 'Filtri rimossi con successo'));
+    exit;
+  }
+}
 
 $filters=Utils::createAllSongsFilters(); 
 
@@ -44,6 +74,183 @@ $tables.='
 ';
 
 $scripts.='
+// Funzione per salvare i filtri nella sessione PHP lato applicazione
+function saveFiltersToSession() {
+  // Non salvare se i filtri non sono ancora stati caricati
+  if (!filtersLoaded) {
+    console.log("[songs] Filtri non ancora caricati, non salvo");
+    return;
+  }
+  
+  var filters = {};
+  var hasNonDefaultFilters = false;
+  
+  // Salva tutti i filtri
+  $(".songFilter_select").each(function() {
+    var id = $(this).attr("id");
+    if (!id || id === \'undefined\') {
+      return; // Salta elementi senza ID valido
+    }
+    if (id === "f_format") {
+      // Per la multiselect format, salva come array
+      var formatValues = [];
+      $(this).find("option:selected").each(function() {
+        var val = $(this).val();
+        if (val && val !== \'\' && val !== \'0\') {
+          formatValues.push(val);
+          hasNonDefaultFilters = true;
+        }
+      });
+      filters[id] = formatValues;
+    } else {
+      var val = $(this).val() || \'0\';
+      filters[id] = val;
+      // Considera non-default se il valore non è \'0\' o il primo valore di default
+      if (val !== \'0\' && val !== \'\') {
+        // Verifica se non è il valore di default (primo option)
+        var firstOption = $(this).find("option:first").val();
+        if (val !== firstOption) {
+          hasNonDefaultFilters = true;
+        }
+      }
+    }
+  });
+  
+  // Se non ci sono filtri non-default, non salvare (evita di sovrascrivere con valori vuoti)
+  if (!hasNonDefaultFilters) {
+    console.log("[songs] Filtri vuoti o di default, non salvo in sessione");
+    return;
+  }
+  
+  // Salva nella sessione PHP lato applicazione (non tramite API)
+  console.log("[songs] Invio filtri da salvare:", filters);
+  $.ajax({
+    url: "songs.php?action=saveFilters",
+    method: "POST",
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+    processData: false,
+    data: JSON.stringify(filters),
+    success: function(response) {
+      console.log("[songs] Filtri salvati in sessione - Risposta:", response);
+    },
+    error: function(xhr, status, error) {
+      console.error("[songs] Errore nel salvataggio filtri:", error, "Status:", status, "Response:", xhr.responseText);
+    }
+  });
+}
+
+// Variabile globale per indicare se i filtri sono stati caricati
+var filtersLoaded = false;
+
+// Funzione per ripristinare i filtri dalla sessione
+function loadFiltersFromSession(callback) {
+  // Carica i filtri dalla sessione PHP lato applicazione (non tramite API)
+  $.ajax({
+    url: "songs.php?action=getFilters&t=" + new Date().getTime(),
+    method: "GET",
+    dataType: "json",
+    cache: false,
+    success: function(response) {
+      console.log("[songs] Risposta filtri dalla sessione:", response);
+      if(response && response.success && response.data && Object.keys(response.data).length > 0) {
+        var filters = response.data;
+        console.log("[songs] Filtri caricati dalla sessione:", filters);
+        
+        // Applica i filtri ai select
+        var filtersApplied = false;
+        var appliedFilters = []; // Traccia quali filtri sono stati applicati
+        
+        for (var id in filters) {
+          if (filters.hasOwnProperty(id) && id !== \'undefined\') {
+            var $element = $("#" + id);
+            console.log("[songs] Applico filtro", id, "=", filters[id], "Elemento trovato:", $element.length);
+            if ($element.length > 0) {
+              if (id === "f_format") {
+                // Per la multiselect format, imposta i valori come array
+                if (Array.isArray(filters[id]) && filters[id].length > 0) {
+                  console.log("[songs] Applico format selezionati:", filters[id]);
+                  $element.find("option").each(function() {
+                    var val = $(this).val();
+                    if (filters[id].indexOf(val) !== -1) {
+                      $(this).prop("selected", true);
+                      filtersApplied = true;
+                    }
+                  });
+                  appliedFilters.push($element);
+                }
+              } else {
+                var filterValue = filters[id];
+                console.log("[songs] Tentativo di applicare filtro", id, "valore:", filterValue, "tipo:", typeof filterValue);
+                if (filterValue !== undefined && filterValue !== null && filterValue !== \'\') {
+                  // Converti a stringa se necessario per il confronto
+                  var filterValueStr = String(filterValue);
+                  if (filterValueStr !== \'0\' && filterValueStr !== \'\') {
+                    $element.val(filterValueStr);
+                    filtersApplied = true;
+                    appliedFilters.push($element);
+                    console.log("[songs] Filtro", id, "impostato a", filterValueStr, "valore attuale:", $element.val());
+                  } else {
+                    console.log("[songs] Filtro", id, "ignorato (valore 0 o vuoto)");
+                  }
+                } else {
+                  console.log("[songs] Filtro", id, "ignorato (valore undefined/null/vuoto)");
+                }
+              }
+            } else {
+              console.warn("[songs] Elemento", id, "non trovato");
+            }
+          }
+        }
+        
+        if (filtersApplied) {
+          // Aggiorna il display dei format dopo il caricamento
+          setTimeout(function() {
+            if (typeof updateFormatDisplay === \'function\') {
+              updateFormatDisplay();
+            }
+            // Forza un trigger di change sui select per assicurarsi che reloadTable() venga chiamato
+            // Questo garantisce che reloadTable() legga i valori corretti dai select
+            appliedFilters.forEach(function($el) {
+              $el.trigger(\'change\');
+            });
+            // Se non ci sono filtri con event handler, chiama direttamente reloadTable
+            setTimeout(function() {
+              if (typeof reloadTable === \'function\') {
+                console.log("[songs] Chiamata diretta reloadTable() dopo ripristino filtri");
+                reloadTable();
+              }
+            }, 100);
+          }, 500); // Aumentato il delay per assicurarsi che i select siano aggiornati
+        }
+        
+        filtersLoaded = true;
+        filtersRestoredFromSession = true; // Segna che i filtri sono stati ripristinati
+        if (typeof callback === \'function\') {
+          callback(true);
+        }
+        return true;
+      } else {
+        console.log("[songs] Nessun filtro salvato nella sessione");
+        filtersLoaded = true;
+        filtersRestoredFromSession = false; // Nessun filtro da ripristinare
+        if (typeof callback === \'function\') {
+          callback(false);
+        }
+        return false;
+      }
+    },
+    error: function(xhr, status, error) {
+      console.error("[songs] Errore nel caricamento filtri:", error, xhr);
+      filtersLoaded = true;
+      if (typeof callback === \'function\') {
+        callback(false);
+      }
+      return false;
+    }
+  });
+}
+
 $(document).ready(function() {
   // Carica e popola i format dall\'API nella multiselect
   $.ajax({
@@ -62,16 +269,24 @@ $(document).ready(function() {
           var frmtNome = (format.frmt_nome && format.frmt_nome !== \'\') ? format.frmt_nome : \'Format #\' + frmtId;
           $formatSelect.append(\'<option value="\' + frmtId + \'">\' + frmtNome + \'</option>\');
         });
-        // Aggiorna il display dei format dopo il caricamento
+        
+        // Dopo aver popolato i format, carica i filtri dalla sessione
+        // Usa un piccolo delay per assicurarsi che gli elementi siano nel DOM
         setTimeout(function() {
-          if (typeof updateFormatDisplay === \'function\') {
-            updateFormatDisplay();
-          }
-        }, 50);
+          loadFiltersFromSession(function(success) {
+            if (success) {
+              console.log("[songs] Filtri ripristinati con successo");
+            } else {
+              console.log("[songs] Nessun filtro da ripristinare o errore nel ripristino");
+            }
+          });
+        }, 150);
       }
     },
     error: function(xhr, status, error) {
       // Errore silenzioso nel caricamento format
+      // Prova comunque a caricare i filtri dalla sessione
+      loadFiltersFromSession();
     }
   });
   
@@ -186,6 +401,11 @@ $(document).ready(function() {
     if ($(this).attr(\'id\') === \'f_format\') {
       updateFormatDisplay();
     }
+    // Salva i filtri nella sessione quando cambiano
+    // Usa un delay per evitare di salvare durante il ripristino iniziale
+    setTimeout(function() {
+      saveFiltersToSession();
+    }, 300);
     reloadTable()
   });
   
@@ -210,6 +430,15 @@ $(document).ready(function() {
     // Reset la multiselect format
     $("#f_format option").prop("selected", false);
     updateFormatDisplay();
+    // Rimuovi i filtri dalla sessione PHP lato applicazione
+    $.ajax({
+      url: "songs.php?action=clearFilters",
+      method: "GET",
+      dataType: "json",
+      success: function(response) {
+        console.log("[songs] Filtri rimossi dalla sessione");
+      }
+    });
     reloadTable()
   });
 
