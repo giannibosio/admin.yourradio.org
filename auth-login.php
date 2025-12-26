@@ -25,12 +25,16 @@ if(isset($_POST['inputLogin']) && isset($_POST['inputPassword'])){
   if(empty($user) || count($user)==0){
     $msg = "Login o password non riconosciute !";
   }else{
+    if($user[0]['role']!=3){  
+      $msg = "Utente non autorizzato a accedere a questa area!";
+    }else{  
     $lastLogin=Login::addLastLoginById($user[0]['id']);
     $_SESSION["login"] = $user[0]['login'];
     $_SESSION["password"] = $_POST['inputPassword'];
     $_SESSION["nome"] = $user[0]['nome'];
     $_SESSION["userID"] = $user[0]['id'];
     header("location:".$startpage); 
+    }
   }
 }
 include_once('inc/head.php');
