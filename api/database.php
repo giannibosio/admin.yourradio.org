@@ -368,15 +368,25 @@ class Songs extends DB
                 foreach ($formats as $key => $format) {
                     $formatId = $format['frmt_id'];
                     
-                    // Conta le song per questo format
-                    $countQuery = "SELECT COUNT(DISTINCT id_song) as count FROM `song_format` WHERE `id_format` = :format_id";
+                    // Conta le song associate a questo format (totali, attive e non attive)
+                    $countQuery = "SELECT 
+                        COUNT(DISTINCT sf.id_song) as count_total,
+                        COUNT(DISTINCT CASE WHEN s.sg_attivo = 1 THEN sf.id_song END) as count_active,
+                        COUNT(DISTINCT CASE WHEN s.sg_attivo = 0 THEN sf.id_song END) as count_inactive
+                    FROM `song_format` sf
+                    LEFT JOIN `songs` s ON sf.id_song = s.sg_id
+                    WHERE sf.id_format = :format_id";
                     $countSt = self::$db->prepare($countQuery);
                     if ($countSt) {
                         $countSt->execute(array(':format_id' => $formatId));
                         $countResult = $countSt->fetch();
-                        $formats[$key]['songs_count'] = isset($countResult['count']) ? (int)$countResult['count'] : 0;
+                        $formats[$key]['songs_count'] = isset($countResult['count_total']) ? (int)$countResult['count_total'] : 0;
+                        $formats[$key]['songs_active'] = isset($countResult['count_active']) ? (int)$countResult['count_active'] : 0;
+                        $formats[$key]['songs_inactive'] = isset($countResult['count_inactive']) ? (int)$countResult['count_inactive'] : 0;
                     } else {
                         $formats[$key]['songs_count'] = 0;
+                        $formats[$key]['songs_active'] = 0;
+                        $formats[$key]['songs_inactive'] = 0;
                     }
                     
                     // Assicurati che i campi siano sempre presenti

@@ -39,9 +39,13 @@ function openEditFormatModal(formatId) {
           $("#editFormatActive").prop("checked", format.frmt_active == 1);
           $("#editFormatPermettiRipetizione").prop("checked", format.frmt_permettiRipetizioneArtista == 1);
           
-          // Imposta il numero di songs collegate
+          // Imposta il numero di songs abbinate
           var songsCount = format.songs_count || 0;
+          var songsActive = format.songs_active || 0;
+          var songsInactive = format.songs_inactive || 0;
           $("#editFormatSongsCount").text(songsCount);
+          $("#editFormatSongsActive").text(songsActive);
+          $("#editFormatSongsInactive").text(songsInactive);
           
           // Mostra il modale
           $("#editFormatModal").modal("show");
@@ -84,6 +88,8 @@ $(document).ready(function() {
           var formatDescrizione = format.frmt_descrizione || \'\';
           var formatPermettiRipetizione = format.frmt_permettiRipetizioneArtista || 0;
           var songsCount = format.songs_count || 0;
+          var songsActive = format.songs_active || 0;
+          var songsInactive = format.songs_inactive || 0;
           var active = format.frmt_active || 0;
           
           // Determina il colore della card:
@@ -115,7 +121,11 @@ $(document).ready(function() {
           // Se format è attivo ma songs = 0, mostra in nero e grassetto
           // Altrimenti testo normale
           var songsTextClass = (active == 1 && songsCount == 0) ? \'text-dark font-weight-bold\' : textClass;
-          cardHtml += \'<span class="h3 small \' + songsTextClass + \' d-block mt-2">\' + songsCount + \' songs</span>\';
+          var songsText = songsCount + \' songs\';
+          if (songsCount > 0) {
+            songsText += \' (\' + songsActive + \' / \' + songsInactive + \')\';
+          }
+          cardHtml += \'<span class="h3 small \' + songsTextClass + \' d-block mt-2">\' + songsText + \'</span>\';
           
           var ripetizioneText = formatPermettiRipetizione == 1 ? \'SI\' : \'NO\';
           cardHtml += \'<span class="h6 small \' + textClass + \' d-block">Ripetizione artista: \' + ripetizioneText + \'</span>\';
@@ -193,8 +203,14 @@ $(document).ready(function() {
             
             // Se format è attivo ma songs = 0, mostra in nero e grassetto
             // Altrimenti testo normale
+            var songsActive = format.songs_active || 0;
+            var songsInactive = format.songs_inactive || 0;
             var songsTextClass = (active == 1 && songsCount == 0) ? \'text-dark font-weight-bold\' : textClass;
-            cardHtml += \'<span class="h3 small \' + songsTextClass + \' d-block mt-2">\' + songsCount + \' songs</span>\';
+            var songsText = songsCount + \' songs\';
+            if (songsCount > 0) {
+              songsText += \' (\' + songsActive + \' / \' + songsInactive + \')\';
+            }
+            cardHtml += \'<span class="h3 small \' + songsTextClass + \' d-block mt-2">\' + songsText + \'</span>\';
             
             var ripetizioneText = formatPermettiRipetizione == 1 ? \'SI\' : \'NO\';
             cardHtml += \'<span class="h6 small \' + textClass + \' d-block">Ripetizione artista: \' + ripetizioneText + \'</span>\';
@@ -620,7 +636,9 @@ $(document).ready(function() {
               <input type="checkbox" class="custom-control-input" id="editFormatPermettiRipetizione" name="frmt_permettiRipetizioneArtista" value="1">
               <label class="custom-control-label" for="editFormatPermettiRipetizione">Permetti Ripetizione Artista</label>
             </div>
-            <p class="mt-2 mb-0"><small class="text-muted">Song collegate: <span id="editFormatSongsCount">0</span></small></p>
+            <p class="mt-2 mb-0"><small class="text-muted">Song abbinate: <span id="editFormatSongsCount">0</span></small></p>
+            <p class="mb-0"><small class="text-muted">Attive: <span id="editFormatSongsActive">0</span></small></p>
+            <p class="mb-0"><small class="text-muted">Non attive: <span id="editFormatSongsInactive">0</span></small></p>
           </div>
         </form>
         <div id="editFormatLoadingSpinner" class="text-center" style="display:none;">

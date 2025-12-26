@@ -184,6 +184,13 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
         <input type="hidden" id="formats" name="formats" value="">
       </div>
     </div>
+    
+    <div class="form-row">
+      <div class="col-md-12 mb-3">
+        <label for="formats_selected_display">Format Selezionati</label>
+        <input type="text" class="form-control" id="formats_selected_display" readonly placeholder="Nessun format selezionato">
+      </div>
+    </div>
 
     <div class="form-row" id="form-row-alert-file" style="<?php echo ($file_audio_ok) ? 'display:none;' : ''?>">
       <div class="col-md-12 mb-3"> 
@@ -262,7 +269,7 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
             <span aria-hidden="true">&times;</span>
           </button>
         </div>
-        <div class="modal-body">Eliminare definitivamente <?=strtoupper($s[0]['sg_artista'] ?? '')?> - <?=strtoupper($s[0]['sg_titolo'] ?? '')?>?</div>
+        <div class="modal-body" id="deleteSongModalBody">Eliminare definitivamente questa song?</div>
         <div class="modal-footer">
           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
           <button class="btn mb-2 btn-danger" id="deleteSong" data-dismiss="modal">Cancella</button>
@@ -408,32 +415,42 @@ $( ".toSanitize" ).change(function() {
   $(this).val(clean_input($(this).val()));
 });
 
-$("#downloadFile").on("click", function () {  
-  var filename = $("#sg_file").val() || "<?=($s[0]['sg_file'] ?? '')?>";
-  if (filename) {
-    var audioUrl = "https://yourradio.org/player/song/" + filename + ".mp3";
-    // Mostra il player audio nella pagina
-    var $audioPlayer = $("#audioPlayer");
-    var $playerRow = $("#form-row-audio-player");
-    
-    $audioPlayer.attr("src", audioUrl);
-    $playerRow.fadeIn("fast");
-    // Avvia la riproduzione
-    $audioPlayer[0].play().catch(function(error) {
-      console.log("Errore nella riproduzione:", error);
-    });
+$(document).on("click", "#downloadFile", function () {  
+  var filename = $("#sg_file").val();
+  if (!filename || filename === '' || filename === '0') {
+    console.log("[downloadFile] Nessun file audio disponibile");
+    return;
   }
+  
+  var audioUrl = "https://yourradio.org/player/song/" + filename + ".mp3";
+  console.log("[downloadFile] Caricamento audio:", audioUrl);
+  
+  // Mostra il player audio nella pagina
+  var $audioPlayer = $("#audioPlayer");
+  var $playerRow = $("#form-row-audio-player");
+  
+  if ($audioPlayer.length === 0 || $playerRow.length === 0) {
+    console.error("[downloadFile] Player audio non trovato");
+    return;
+  }
+  
+  $audioPlayer.attr("src", audioUrl);
+  $playerRow.fadeIn("fast");
+  // Avvia la riproduzione
+  $audioPlayer[0].play().catch(function(error) {
+    console.log("Errore nella riproduzione:", error);
+  });
 });
 
 // Chiudi il player audio
-$("#closeAudioPlayer").on("click", function() {
+$(document).on("click", "#closeAudioPlayer", function() {
   var $audioPlayer = $("#audioPlayer");
   $audioPlayer[0].pause();
   $audioPlayer.attr("src", "");
   $("#form-row-audio-player").fadeOut("fast");
 });
 
-$("#uploadFile").on("click", function (e) {
+$(document).on("click", "#uploadFile", function (e) {
     e.preventDefault();
     // Leggi l'ID dal campo del form o dall'URL
     var songId = $("#sg_id").val();
@@ -513,7 +530,7 @@ $("#uploadFile").on("click", function (e) {
     return false;
 });
   
-  $(".chiudiSchedaSong").on("click", function(){
+  $(document).on("click", ".chiudiSchedaSong", function(){
     // Ferma l'audio quando si esce dalla pagina
     var $audioPlayer = $("#audioPlayer");
     if ($audioPlayer.length > 0 && $audioPlayer[0]) {
@@ -524,24 +541,65 @@ $("#uploadFile").on("click", function (e) {
     // Nascondi il player
     $("#form-row-audio-player").hide();
     
-    $(".songs-table").fadeIn( "fast", function() {
-      $(".song-scheda").fadeOut( "fast");
-    });  
+    // Ripristina il titolo nella pagina parent (songs.php) se siamo in un iframe
+    // Altrimenti, se la scheda è caricata dinamicamente, il titolo viene gestito da songs.php
+    var titleHtml = '<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span> Songs</span>';
+    
+    if (window.parent && window.parent !== window && window.parent.$) {
+      window.parent.$(".page-title").html(titleHtml);
+      // Chiudi la scheda nella pagina parent
+      window.parent.$(".songs-table").fadeIn( "fast", function() {
+        window.parent.$(".song-scheda").fadeOut( "fast");
+      });
+    } else {
+      // Se non siamo in un iframe, chiudi normalmente (la scheda è caricata dinamicamente)
+      // Cerca nella pagina parent se esiste
+      var $parentSongsTable = window.top && window.top.$ ? window.top.$(".songs-table") : null;
+      var $parentSongScheda = window.top && window.top.$ ? window.top.$(".song-scheda") : null;
+      
+      if ($parentSongsTable && $parentSongsTable.length > 0) {
+        // Siamo in un iframe, usa la pagina parent
+        window.top.$(".page-title").html(titleHtml);
+        $parentSongsTable.fadeIn( "fast", function() {
+          $parentSongScheda.fadeOut( "fast");
+        });
+      } else {
+        // Prova a cercare nella stessa pagina
+        var $songsTable = $(".songs-table");
+        var $songScheda = $(".song-scheda");
+        if ($songsTable.length > 0) {
+          $songsTable.fadeIn( "fast", function() {
+            $songScheda.fadeOut( "fast");
+          });
+        }
+      }
+    }
   });
-  $( "#deleteSong" ).click(function() {
+  $(document).on("click", "#deleteSong", function() {
+    var songId = $("#sg_id").val();
+    if (!songId || songId === '' || songId === 'nuova') {
+      alert("Errore: ID song non valido");
+      return;
+    }
+    
     $("#formAction").val("deleteSong");
     $.ajax( {
-      url: 'https://yourradio.org/api/songs/<?=($s[0]['sg_id'] ?? '')?>',
+      url: 'https://yourradio.org/api/songs/' + songId,
       method: 'DELETE',
       success: function (response, status, jqxhr) {
         console.log(response);
         if(response.success) {
-          $("#<?=($s[0]['sg_id'] ?? '')?>").css("display", "none");
+          // Chiudi il modal
+          $("#verticalModal").modal("hide");
+          // Chiudi la scheda e torna alla lista
           $(".chiudiSchedaSong").click();
+        } else {
+          alert("Errore durante la cancellazione: " + (response.error ? response.error.message : "Errore sconosciuto"));
         }
       },
       error: function (jqxhr, status, errorMessage) {
         console.log("ERROR "+errorMessage);
+        alert("Errore durante la cancellazione: " + errorMessage);
       }
     });
   });
@@ -549,11 +607,22 @@ $("#uploadFile").on("click", function (e) {
   // Funzione per aggiornare l'input hidden con i format selezionati
   function updateFormats() {
     var selectedIds = [];
+    var selectedNames = [];
     $("#formats_select option:selected").each(function() {
-      selectedIds.push(parseInt($(this).val()));
+      var formatId = parseInt($(this).val());
+      var formatName = $(this).text();
+      if (formatId > 0) {
+        selectedIds.push(formatId);
+        selectedNames.push(formatName);
+      }
     });
     $("#formats").val(JSON.stringify(selectedIds));
-    console.log("[updateFormats] Format selezionati aggiornati:", selectedIds);
+    
+    // Aggiorna il campo di visualizzazione
+    var displayText = selectedNames.length > 0 ? selectedNames.join(", ") : "Nessun format selezionato";
+    $("#formats_selected_display").val(displayText);
+    
+    console.log("[updateFormats] Format selezionati aggiornati:", selectedIds, "Nomi:", selectedNames);
   }
   
   // Carica i format quando il documento è pronto o quando la pagina viene caricata dinamicamente
@@ -652,8 +721,16 @@ $("#uploadFile").on("click", function (e) {
           if(data.sg_id) {
             $("#sg_id").val(data.sg_id);
             // Aggiorna la visibilità dei pulsanti ora che abbiamo un ID valido
-            $("#btnDelete").show();
-            $("#btnUpload").show();
+            setTimeout(function() {
+              updateButtonVisibility();
+            }, 100);
+            // Aggiorna il testo del modal di cancellazione
+            var artista = data.sg_artista || '';
+            var titolo = data.sg_titolo || '';
+            if (artista || titolo) {
+              var modalText = "Eliminare definitivamente " + (artista ? artista.toUpperCase() : '') + (artista && titolo ? " - " : '') + (titolo ? titolo.toUpperCase() : '') + "?";
+              $("#deleteSongModalBody").text(modalText);
+            }
           }
           // Aggiorna tutti i campi del form con i dati aggiornati
           if(data.sg_artista !== undefined) $("#sg_artista").val(data.sg_artista);
@@ -691,7 +768,12 @@ $("#uploadFile").on("click", function (e) {
           // Aggiorna il titolo della pagina
           if(data.sg_id) {
             var pageTitle = " " + data.sg_id + ".mp3";
-            $(".page-title").html('<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span>' + pageTitle + '</span>');
+            // Aggiorna il titolo nella pagina parent (songs.php) se siamo in un iframe
+            if (window.parent && window.parent.$) {
+              window.parent.$(".page-title").html('<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span>' + pageTitle + '</span>');
+            } else {
+              $(".page-title").html('<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span>' + pageTitle + '</span>');
+            }
             document.title = pageTitle;
           }
           // Aggiorna anche i format se presenti
@@ -726,16 +808,26 @@ $("#uploadFile").on("click", function (e) {
       // Prova a leggere dall'URL
       var urlParams = new URLSearchParams(window.location.search);
       songId = urlParams.get('id');
+      if (songId && songId !== 'nuova' && songId !== '') {
+        $("#sg_id").val(songId);
+      }
     }
+    
+    console.log("[updateButtonVisibility] Song ID:", songId);
+    var $btnDelete = $("#btnDelete");
+    var $btnUpload = $("#btnUpload");
+    console.log("[updateButtonVisibility] Pulsanti trovati - Delete:", $btnDelete.length, "Upload:", $btnUpload.length);
     
     if (songId && songId !== '' && songId !== 'nuova') {
       // Mostra i pulsanti CANCELLA e UPLOAD
-      $("#btnDelete").show();
-      $("#btnUpload").show();
+      console.log("[updateButtonVisibility] Mostro i pulsanti CANCELLA e UPLOAD");
+      $btnDelete.show();
+      $btnUpload.show();
     } else {
       // Nascondi i pulsanti CANCELLA e UPLOAD
-      $("#btnDelete").hide();
-      $("#btnUpload").hide();
+      console.log("[updateButtonVisibility] Nascondo i pulsanti CANCELLA e UPLOAD");
+      $btnDelete.hide();
+      $btnUpload.hide();
     }
   }
   
@@ -810,6 +902,9 @@ $("#uploadFile").on("click", function (e) {
       }
       formData[item.name] = item.value;
     });
+    
+    // Aggiungi manualmente sg_attivo (checkbox non viene incluso se non selezionato)
+    formData.sg_attivo = $("#sg_attivo").is(":checked") ? 1 : 0;
     
     // Aggiungi i format selezionati come array (sempre, anche se vuoto)
     var formatsArray = [];
