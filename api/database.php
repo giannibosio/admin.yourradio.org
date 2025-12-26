@@ -430,6 +430,147 @@ class Songs extends DB
         }
         return true;
     }
+    
+    public static function createFormat($formatData)
+    {
+        try {
+            // Pulisci e valida il nome (solo maiuscolo, lettere, numeri, spazi, max 16 caratteri)
+            $nome = isset($formatData['frmt_nome']) ? strtoupper(trim($formatData['frmt_nome'])) : '';
+            $nome = preg_replace('/[^A-Z0-9\s]/', '', $nome); // Rimuovi caratteri non validi
+            
+            if (empty($nome)) {
+                throw new Exception("Il nome del format è obbligatorio e deve contenere solo lettere, numeri e spazi");
+            }
+            
+            // Limita a 16 caratteri
+            if (strlen($nome) > 16) {
+                $nome = substr($nome, 0, 16);
+            }
+            
+            // Valida la descrizione (max 25 caratteri)
+            $descrizione = isset($formatData['frmt_descrizione']) ? trim($formatData['frmt_descrizione']) : '';
+            if (empty($descrizione)) {
+                throw new Exception("La descrizione è obbligatoria");
+            }
+            if (strlen($descrizione) > 25) {
+                $descrizione = substr($descrizione, 0, 25);
+            }
+            
+            // Genera l'MD5 del nome
+            $nomeCript = md5($nome);
+            
+            // Inserisci nel database
+            $query = "INSERT INTO `format` SET 
+                      `frmt_nome` = :nome,
+                      `frmt_descrizione` = :descrizione,
+                      `frmt_nome_cript` = :nome_cript,
+                      `frmt_active` = 0";
+            
+            $st = self::$db->prepare($query);
+            $result = $st->execute(array(
+                ':nome' => $nome,
+                ':descrizione' => $descrizione,
+                ':nome_cript' => $nomeCript
+            ));
+            
+            if (!$result) {
+                $errorInfo = $st->errorInfo();
+                throw new Exception("Errore database: " . $errorInfo[2]);
+            }
+            
+            $newId = self::$db->lastInsertId();
+            return $newId;
+        } catch (Exception $e) {
+            error_log("Errore in createFormat: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    public static function updateFormat($formatId, $formatData)
+    {
+        try {
+            $formatId = (int)$formatId;
+            if ($formatId <= 0) {
+                throw new Exception("ID format non valido");
+            }
+            
+            // Valida la descrizione (max 25 caratteri)
+            $descrizione = isset($formatData['frmt_descrizione']) ? trim($formatData['frmt_descrizione']) : '';
+            if (empty($descrizione)) {
+                throw new Exception("La descrizione è obbligatoria");
+            }
+            if (strlen($descrizione) > 25) {
+                $descrizione = substr($descrizione, 0, 25);
+            }
+            
+            // Prepara i campi da aggiornare
+            $fields = array();
+            $params = array(':id' => $formatId);
+            
+            $fields[] = "`frmt_descrizione` = :descrizione";
+            $params[':descrizione'] = $descrizione;
+            
+            if (isset($formatData['frmt_active'])) {
+                $fields[] = "`frmt_active` = :active";
+                $params[':active'] = (int)$formatData['frmt_active'];
+            }
+            
+            if (isset($formatData['frmt_permettiRipetizioneArtista'])) {
+                $fields[] = "`frmt_permettiRipetizioneArtista` = :permetti_ripetizione";
+                $params[':permetti_ripetizione'] = (int)$formatData['frmt_permettiRipetizioneArtista'];
+            }
+            
+            if (empty($fields)) {
+                throw new Exception("Nessun campo da aggiornare");
+            }
+            
+            // Aggiorna nel database
+            $query = "UPDATE `format` SET " . implode(', ', $fields) . " WHERE `frmt_id` = :id";
+            
+            $st = self::$db->prepare($query);
+            $result = $st->execute($params);
+            
+            if (!$result) {
+                $errorInfo = $st->errorInfo();
+                throw new Exception("Errore database: " . $errorInfo[2]);
+            }
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Errore in updateFormat: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    public static function deleteFormat($formatId)
+    {
+        try {
+            $formatId = (int)$formatId;
+            if ($formatId <= 0) {
+                throw new Exception("ID format non valido");
+            }
+            
+            // Elimina le relazioni con le songs
+            $queryDeleteRelations = "DELETE FROM `song_format` WHERE `id_format` = :id";
+            $stDelete = self::$db->prepare($queryDeleteRelations);
+            $stDelete->execute(array(':id' => $formatId));
+            
+            // Elimina il format
+            $query = "DELETE FROM `format` WHERE `frmt_id` = :id";
+            $st = self::$db->prepare($query);
+            $result = $st->execute(array(':id' => $formatId));
+            
+            if (!$result) {
+                $errorInfo = $st->errorInfo();
+                throw new Exception("Errore database: " . $errorInfo[2]);
+            }
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Errore in deleteFormat: " . $e->getMessage());
+            throw $e;
+        }
+    }
 }
 
 class Gruppi extends DB

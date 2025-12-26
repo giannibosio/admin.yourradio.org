@@ -135,6 +135,113 @@ try {
                 } catch (Exception $e) {
                     sendErrorResponse("Errore: " . $e->getMessage(), 500);
                 }
+            } elseif ($requestMethod === 'PUT' || $requestMethod === 'PATCH') {
+                // Aggiorna format
+                try {
+                    if ($id === null) {
+                        sendErrorResponse("ID format richiesto", 400);
+                    }
+                    
+                    // Debug: log dei dati ricevuti
+                    error_log("PUT /api/formats/" . $id . " - Dati ricevuti: " . print_r($data, true));
+                    
+                    // Se i dati non sono un array, prova a decodificarli manualmente
+                    if (!is_array($data)) {
+                        $rawInput = file_get_contents('php://input');
+                        if (!empty($rawInput)) {
+                            $decoded = json_decode($rawInput, true);
+                            if (is_array($decoded)) {
+                                $data = $decoded;
+                            } else {
+                                sendErrorResponse("Dati non validi. Atteso JSON object.", 400);
+                            }
+                        } else {
+                            sendErrorResponse("Nessun dato ricevuto", 400);
+                        }
+                    }
+                    
+                    $result = Songs::updateFormat($id, $data);
+                    if ($result) {
+                        sendSuccessResponse(['id' => $id], "Format aggiornato con successo");
+                    } else {
+                        sendErrorResponse("Errore nell'aggiornamento del format", 500);
+                    }
+                } catch (Exception $e) {
+                    error_log("Errore in PUT /api/formats: " . $e->getMessage());
+                    sendErrorResponse("Errore: " . $e->getMessage(), 500);
+                }
+            } elseif ($requestMethod === 'DELETE') {
+                // Cancella format
+                try {
+                    if ($id === null) {
+                        sendErrorResponse("ID format richiesto", 400);
+                    }
+                    
+                    $result = Songs::deleteFormat($id);
+                    if ($result) {
+                        sendSuccessResponse(['id' => $id], "Format cancellato con successo");
+                    } else {
+                        sendErrorResponse("Errore nella cancellazione del format", 500);
+                    }
+                } catch (Exception $e) {
+                    error_log("Errore in DELETE /api/formats: " . $e->getMessage());
+                    sendErrorResponse("Errore: " . $e->getMessage(), 500);
+                }
+            } elseif ($requestMethod === 'POST') {
+                // Crea nuovo format
+                try {
+                    // Debug: log dei dati ricevuti
+                    error_log("POST /api/formats - Content-Type: " . (isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : 'non impostato'));
+                    error_log("POST /api/formats - Raw input: " . file_get_contents('php://input'));
+                    error_log("POST /api/formats - Dati parsati: " . print_r($data, true));
+                    error_log("POST /api/formats - Tipo dati: " . gettype($data));
+                    
+                    // Se i dati non sono un array, prova a decodificarli manualmente
+                    if (!is_array($data)) {
+                        $rawInput = file_get_contents('php://input');
+                        if (!empty($rawInput)) {
+                            $decoded = json_decode($rawInput, true);
+                            if (is_array($decoded)) {
+                                $data = $decoded;
+                                error_log("POST /api/formats - Dati decodificati manualmente: " . print_r($data, true));
+                            } else {
+                                error_log("POST /api/formats - Impossibile decodificare JSON. Errore: " . json_last_error_msg());
+                                sendErrorResponse("Dati non validi. Atteso JSON object. Errore: " . json_last_error_msg(), 400);
+                            }
+                        } else {
+                            // Se non ci sono dati raw, prova $_POST
+                            if (!empty($_POST)) {
+                                $data = $_POST;
+                                error_log("POST /api/formats - Usati dati da \$_POST: " . print_r($data, true));
+                            } else {
+                                sendErrorResponse("Nessun dato ricevuto", 400);
+                            }
+                        }
+                    }
+                    
+                    // Verifica che i dati siano un array
+                    if (!is_array($data)) {
+                        sendErrorResponse("Dati non validi. Atteso JSON object. Tipo ricevuto: " . gettype($data), 400);
+                    }
+                    
+                    // Verifica i campi richiesti
+                    if (!isset($data['frmt_nome']) || empty(trim($data['frmt_nome']))) {
+                        sendErrorResponse("Il campo 'frmt_nome' è obbligatorio", 400);
+                    }
+                    if (!isset($data['frmt_descrizione']) || empty(trim($data['frmt_descrizione']))) {
+                        sendErrorResponse("Il campo 'frmt_descrizione' è obbligatorio", 400);
+                    }
+                    
+                    $newId = Songs::createFormat($data);
+                    if ($newId) {
+                        sendSuccessResponse(['id' => $newId], "Format creato con successo", 201);
+                    } else {
+                        sendErrorResponse("Errore nella creazione del format", 500);
+                    }
+                } catch (Exception $e) {
+                    error_log("Errore in POST /api/formats: " . $e->getMessage());
+                    sendErrorResponse("Errore: " . $e->getMessage(), 500);
+                }
             } else {
                 sendErrorResponse("Method not allowed", 405);
             }

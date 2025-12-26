@@ -91,20 +91,41 @@ function getRequestData() {
     if ($method === 'GET') {
         return $_GET;
     } elseif ($method === 'POST') {
-        $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
+        // Controlla Content-Type in entrambi i modi (per compatibilità PHP 5.6)
+        $contentType = '';
+        if (isset($_SERVER['CONTENT_TYPE'])) {
+            $contentType = $_SERVER['CONTENT_TYPE'];
+        } elseif (isset($_SERVER['HTTP_CONTENT_TYPE'])) {
+            $contentType = $_SERVER['HTTP_CONTENT_TYPE'];
+        }
+        
         if (strpos($contentType, 'application/json') !== false) {
-            $data = json_decode(file_get_contents('php://input'), true);
-            return isset($data) ? $data : [];
+            $rawInput = file_get_contents('php://input');
+            $data = json_decode($rawInput, true);
+            
+            // Se json_decode fallisce, logga l'errore
+            if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+                error_log("JSON decode error: " . json_last_error_msg() . " - Input: " . substr($rawInput, 0, 500));
+            }
+            
+            return isset($data) && is_array($data) ? $data : array();
         }
         return $_POST;
     } elseif ($method === 'PUT' || $method === 'PATCH') {
-        $data = json_decode(file_get_contents('php://input'), true);
-        return isset($data) ? $data : [];
+        $rawInput = file_get_contents('php://input');
+        $data = json_decode($rawInput, true);
+        
+        // Se json_decode fallisce, logga l'errore
+        if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON decode error: " . json_last_error_msg() . " - Input: " . substr($rawInput, 0, 500));
+        }
+        
+        return isset($data) && is_array($data) ? $data : array();
     } elseif ($method === 'DELETE') {
         return $_GET;
     }
     
-    return [];
+    return array();
 }
 
 function countFilesInDirectory($dir) {
