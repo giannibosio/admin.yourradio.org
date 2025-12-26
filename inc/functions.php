@@ -41,6 +41,9 @@ class Utils
     	<div class="cardx card-body shadow mb-6 box-filter">
     	<h4>Filtri</h4><hr>
     	';
+    	
+    	// FILTRI PRINCIPALI IN ALTO: Format, Abilitate, Diritti
+    	
     	//Format - Multiselect (verrà popolata via JavaScript dall'API)
     	$sel .= '
     	<label class="songFilter_select">Format</label>
@@ -57,6 +60,24 @@ class Utils
     	<option value="1">Abilitate</option>
     	<option value="2">Non Abilitate</option>
     	</select>
+    	';
+    	
+    	
+    	
+    	// ACCORDION PER GLI ALTRI FILTRI
+    	$sel .= '
+    	<hr>
+    	<div class="accordion" id="accordionAltriFiltri">
+    		<div class="card">
+    			<div class="card-header" id="headingAltriFiltri">
+    				<h5 class="mb-0">
+    					<button class="btn btn-primary btn-sm" type="button" data-toggle="collapse" data-target="#collapseAltriFiltri" aria-expanded="false" aria-controls="collapseAltriFiltri">
+    						Altri filtri
+    					</button>
+    				</h5>
+    			</div>
+    			<div id="collapseAltriFiltri" class="collapse" aria-labelledby="headingAltriFiltri" data-parent="#accordionAltriFiltri">
+    				<div class="card-body">
     	';
     	
     	//Nazionalità
@@ -176,15 +197,20 @@ class Utils
 
     	//Diritti
     	$sel .= '
-
     	<label class="songFilter_select">Diritti</label>
     	<select id="f_diritti" name="f_diritti" class="form-control songFilter_select">
 	    	<option value="0" selected="">Siae</option>
 	    	<option value="1">Creative</option>
 	    </select>
     	';
-
-
+    	
+		// CHIUSURA ACCORDION
+    	$sel .= '
+    				</div>
+    			</div>
+    		</div>
+    	</div>
+    	';
 
 		$sel .= '
 		<hr>

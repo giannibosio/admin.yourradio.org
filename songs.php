@@ -62,6 +62,12 @@ $(document).ready(function() {
           var frmtNome = (format.frmt_nome && format.frmt_nome !== \'\') ? format.frmt_nome : \'Format #\' + frmtId;
           $formatSelect.append(\'<option value="\' + frmtId + \'">\' + frmtNome + \'</option>\');
         });
+        // Aggiorna il display dei format dopo il caricamento
+        setTimeout(function() {
+          if (typeof updateFormatDisplay === \'function\') {
+            updateFormatDisplay();
+          }
+        }, 50);
       }
     },
     error: function(xhr, status, error) {
@@ -140,7 +146,46 @@ $(document).ready(function() {
     openSong("nuova");
   });
 
+  // Funzione per aggiornare la visualizzazione dei format selezionati
+  function updateFormatDisplay() {
+    var selectedFormats = [];
+    $("#f_format option:selected").each(function() {
+      var formatText = $(this).text();
+      if (formatText && formatText !== \'\') {
+        selectedFormats.push(formatText);
+      }
+    });
+    
+    var $formatDisplay = $("#format-selected-display");
+    if ($formatDisplay.length === 0) {
+      // Crea il div se non esiste, posizionandolo sulla stessa riga dell\'input search
+      var $filterDiv = $("#dataTable-'.$tableId.'_filter");
+      if ($filterDiv.length > 0) {
+        // Modifica il layout del filtro per avere il div a sinistra e l\'input a destra
+        $filterDiv.css(\'display\', \'flex\');
+        $filterDiv.css(\'justify-content\', \'space-between\');
+        $filterDiv.css(\'align-items\', \'center\');
+        $filterDiv.prepend(\'<div id="format-selected-display" style="font-weight: bold; color: white; margin-right: 10px;"></div>\');
+        $formatDisplay = $("#format-selected-display");
+      }
+    }
+    
+    if (selectedFormats.length > 0) {
+      $formatDisplay.text(selectedFormats.join(\', \'));
+    } else {
+      $formatDisplay.text(\'TUTTI I FORMAT\');
+    }
+  }
+  
+  // Inizializza il display dei format dopo che la tabella è stata creata
+  setTimeout(function() {
+    updateFormatDisplay();
+  }, 100);
+  
   $(".songFilter_select").on("change", function(){
+    if ($(this).attr(\'id\') === \'f_format\') {
+      updateFormatDisplay();
+    }
     reloadTable()
   });
   
@@ -152,6 +197,8 @@ $(document).ready(function() {
       // Previeni il comportamento di default e deseleziona manualmente
       e.preventDefault();
       option.selected = false;
+      // Aggiorna il display
+      updateFormatDisplay();
       // Triggera l\'evento change per aggiornare la tabella
       $(this).trigger(\'change\');
     }
@@ -162,6 +209,7 @@ $(document).ready(function() {
     $(".songFilter_select").not("#f_format").prop("selectedIndex",0);
     // Reset la multiselect format
     $("#f_format option").prop("selected", false);
+    updateFormatDisplay();
     reloadTable()
   });
 
