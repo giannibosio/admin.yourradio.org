@@ -674,6 +674,18 @@ class Gruppi extends DB
         return $st->fetchAll();
     }
 
+    public static function selectAllPlayersSottoGruppoById($id)
+    {
+        $query = "SELECT pl.pl_id, pl.pl_active, pl.pl_nome, pl.pl_player_ultimaDataEstesa 
+                  FROM players pl 
+                  JOIN player_subgruppo plsgr ON pl.pl_id = plsgr.plsgr_pl_id 
+                  WHERE plsgr.plsgr_sgr_id = :id 
+                  ORDER BY pl.pl_nome";
+        $st = self::$db->prepare($query);
+        $st->execute([':id' => $id]);
+        return $st->fetchAll();
+    }
+
     public static function selectAllPlayersGruppoById($id)
     {
         $query = "SELECT pl_id, pl_active, pl_nome, pl_player_ultimaDataEstesa FROM players WHERE pl_idGruppo = :id";

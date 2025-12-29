@@ -68,6 +68,39 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
       $_GET["id"]=Gruppi::updateGruppo($_POST);
       $_POST["formAction"]='';
   }
+  if($_POST["formAction"]=="uploadLogo"){
+      $_POST["formAction"]='';
+      $gruppo_nome = strtolower($nome);
+      $path = PLAYER_PATH . $gruppo_nome . "/";
+      
+      // Verifica che le cartelle esistano
+      verifyGroupFolder($id, $gruppo_nome);
+      
+      // Percorsi completi per i file
+      $logo_path = $path . "images/logo_gruppo.png";
+      $logo_thumb_path = $path . "images/thumbnail/logo_gruppo.png";
+      
+      // Gestione upload
+      if(isset($_FILES['logo_file']) && $_FILES['logo_file']['error'] == 0) {
+          $allowed_types = array('image/png', 'image/jpeg', 'image/jpg', 'image/gif');
+          $file_type = $_FILES['logo_file']['type'];
+          
+          if(in_array($file_type, $allowed_types)) {
+              // Carica il file principale
+              if(move_uploaded_file($_FILES['logo_file']['tmp_name'], $logo_path)) {
+                  // Crea una copia per la thumbnail (puoi anche ridimensionarla se necessario)
+                  copy($logo_path, $logo_thumb_path);
+                  $upload_success = true;
+              } else {
+                  $upload_error = "Errore durante il caricamento del file.";
+              }
+          } else {
+              $upload_error = "Tipo di file non supportato. Usa PNG, JPG o GIF.";
+          }
+      } else {
+          $upload_error = "Nessun file caricato o errore durante l'upload.";
+      }
+  }
 
 }
 include_once('inc/head.php');
@@ -92,10 +125,22 @@ $tableSubGruppi='
     if($tot>0){
 foreach($sgs as $sg){
   $plsgr=Gruppi::selectTotPlayersSottoGruppoById($sg['sgr_id']);
+  $totPlayers = $plsgr[0]['tot_player'];
+  $buttonClass = $totPlayers > 0 ? "btn-outline-success" : "btn-outline-danger";
   $tableSubGruppi.='
   <tr>
     <td>'.$sg['sgr_nome'].'</td>
-    <td>'.$plsgr[0]['tot_player'].'</td>
+    <td>
+      <button type="button" class="btn '.$buttonClass.' btn-sm btn-show-players-subgroup" 
+              data-toggle="modal" 
+              data-target="#playersSubgruppoModal" 
+              data-subgruppo-id="'.$sg['sgr_id'].'" 
+              data-subgruppo-nome="'.htmlspecialchars($sg['sgr_nome'], ENT_QUOTES).'"
+              title="Visualizza players"
+              style="width: 40px; font-size: 16px;">
+        '.$totPlayers.'
+      </button>
+    </td>
     <td>
 <button title="cancella" type="button" class="btn btn-outline-danger badge-del-subgroup" data-toggle="modal" data-target="#verticalModalSottogruppo" namegroup="'.strtoupper($sg['sgr_nome']).'" idgroup='.$sg['sgr_id'].'><span class="fe fe-trash fe-16"></span></button>
   </tr>                      
@@ -653,6 +698,91 @@ $script='
     $( "#scheda-gruppo" ).submit();
   });
 
+  // Gestione modale players sottogruppo
+  $(document).on("click", ".btn-show-players-subgroup", function() {
+    var subgruppoId = $(this).data("subgruppo-id");
+    var subgruppoNome = $(this).data("subgruppo-nome");
+    var $modal = $("#playersSubgruppoModal");
+    var $content = $("#playersSubgruppoContent");
+    
+    // Aggiorna il titolo della modale
+    $("#playersSubgruppoModalLabel").text("Players del Sottogruppo: " + subgruppoNome);
+    
+    // Mostra spinner
+    $content.html("<div class=\"text-center\"><div class=\"spinner-border text-primary\" role=\"status\"><span class=\"sr-only\">Caricamento...</span></div></div>");
+    
+    // Carica i players
+    $.ajax({
+      url: "https://yourradio.org/api/subgruppi/" + subgruppoId + "/players",
+      type: "GET",
+      dataType: "json",
+      success: function(response) {
+        if (response.success && response.data && response.data.length > 0) {
+          var html = "<table class=\"table table-hover table-sm\">";
+          html += "<thead><tr><th>Nome</th></tr></thead>";
+          html += "<tbody>";
+          $.each(response.data, function(index, player) {
+            var textColor = player.attivo === "ON" ? "text-success" : "text-danger";
+            html += "<tr class=\"player-row-clickable\" style=\"cursor: pointer;\" data-player-id=\"" + player.id + "\">";
+            html += "<td><span class=\"" + textColor + "\">" + player.nome + "</span></td>";
+            html += "</tr>";
+          });
+          html += "</tbody></table>";
+          $content.html(html);
+        } else {
+          $content.html("<div class=\"alert alert-info\">Nessun player associato a questo sottogruppo.</div>");
+        }
+      },
+      error: function(xhr, status, error) {
+        $content.html("<div class=\"alert alert-danger\">Errore nel caricamento dei players: " + error + "</div>");
+      }
+    });
+  });
+
+  // Gestione click sui players nella modale sottogruppo
+  $(document).on("click", ".player-row-clickable", function() {
+    var playerId = $(this).data("player-id");
+    if (playerId) {
+      // Chiudi la modale
+      $("#playersSubgruppoModal").modal("hide");
+      // Attiva il tab Players
+      $("#gruppo-tab-players").click();
+      // Apri la scheda del player nella tab players
+      setTimeout(function() {
+        openSchedaOnTab("player-inner-scheda.php?id=" + playerId, "tab-players");
+      }, 100);
+    }
+  });
+
+  // Gestione upload logo
+  $("#uploadLogoForm").on("submit", function(e) {
+    e.preventDefault();
+    var formData = new FormData(this);
+    var $btn = $("#uploadLogoBtn");
+    var $spinner = $btn.find(".spinner-border");
+    
+    // Mostra spinner
+    $spinner.removeClass("d-none");
+    $btn.prop("disabled", true);
+    
+    $.ajax({
+      url: window.location.href,
+      type: "POST",
+      data: formData,
+      processData: false,
+      contentType: false,
+      success: function(response) {
+        // Ricarica la pagina per mostrare il nuovo logo
+        window.location.reload();
+      },
+      error: function(xhr, status, error) {
+        alert("Errore durante il caricamento del logo: " + error);
+        $spinner.addClass("d-none");
+        $btn.prop("disabled", false);
+      }
+    });
+  });
+
   $(".tabs-scheda-gruppo ").hide();
   $("#gruppo-tab-players").click();
   $(".tab-players").fadeIn("slow");
@@ -746,7 +876,7 @@ $script='
 
           <div class="col-12 col-lg-10 col-xl-8">
             
-            <div class="my-4">
+            <div class="mb-4">
 
               <div class="alert alert-primary" style="display:none" role="alert">
                 <span class="fe fe-alert-circle fe-16 mr-2"></span>
@@ -754,15 +884,21 @@ $script='
               </div>
 
 
-              <div class="my-4">
+              <div class="mb-4">
 
                 <div class="card-header">
                   
-                  <div class="logo-scheda-gruppo">
+                  <div class="logo-scheda-gruppo mt-0">
                     <h4>Gruppo</h4>
+                    <h2 class="page-title"><?=$title?></h2>
 
-                    <img src="<?=PLAYER_PATH?><?=strtolower($g[0]['gr_nome'])?>/images/logo_gruppo.png" >
-                    <h2 class="page-title"><?=$title?></div></h2>
+                    <img src="https://yourradio.org/player/<?=strtolower($g[0]['gr_nome'])?>/images/logo_gruppo.png" >
+                    <div class="mt-2">
+                      <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#uploadLogoModal">
+                        CAMBIO LOGO
+                      </button>
+                    </div>
+                    </div>
                 </div>
 
                 <div class="card-body gruppo-scheda">
@@ -799,16 +935,9 @@ $script='
                     </div>
                     
 
-                    <div class="accordion w-100" id="accordion1">
-
-                      <div class="card shadow">
-                        <div class="card-header" id="heading1">
-                          <a role="button" href="#collapse1" data-toggle="collapse" data-target="#collapse1" aria-expanded="false" aria-controls="collapse1" class="title-tab">
-                            <span class="fe fe-activity fe-20"></span><strong>Audio</strong>
-                          </a>
-                        </div>
-                        <div id="collapse1" class="collapse" aria-labelledby="heading1" data-parent="#accordion1" style="">
-                          <div class="card-body">
+                    <div class="card shadow">
+                      <div id="collapse1">
+                        <div class="card-body">
                             
                             <ul class="nav nav-pills" id="pills-tab2" role="tablist">
                               <li class="nav-item">
@@ -879,11 +1008,9 @@ $script='
 
 
 
-                          </div>
                         </div>
-                      </div> <!-- // card shadow -->
-
-                    </div> <!-- // accordion -->
+                      </div>
+                    </div> <!-- // card shadow -->
 
 
 
@@ -974,6 +1101,74 @@ $script='
                           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
                           <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal" id="addNewSubGroup">Aggiungi</button>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Modal Players Sottogruppo -->
+                  <div class="modal fade" id="playersSubgruppoModal" tabindex="-1" role="dialog" aria-labelledby="playersSubgruppoModalLabel" aria-hidden="true" data-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="playersSubgruppoModalLabel">Players del Sottogruppo</h5>
+                          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                          </button>
+                        </div>
+                        <div class="modal-body">
+                          <div id="playersSubgruppoContent">
+                            <div class="text-center">
+                              <div class="spinner-border text-primary" role="status">
+                                <span class="sr-only">Caricamento...</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Chiudi</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Modal Upload Logo -->
+                  <div class="modal fade" id="uploadLogoModal" tabindex="-1" role="dialog" aria-labelledby="uploadLogoModalLabel" aria-hidden="true" data-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered" role="document">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="uploadLogoModalLabel">Carica Logo Gruppo</h5>
+                          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                          </button>
+                        </div>
+                        <form id="uploadLogoForm" method="post" enctype="multipart/form-data">
+                          <div class="modal-body">
+                            <?php if(isset($upload_success) && $upload_success): ?>
+                              <div class="alert alert-success" role="alert">
+                                Logo caricato con successo!
+                              </div>
+                            <?php endif; ?>
+                            <?php if(isset($upload_error)): ?>
+                              <div class="alert alert-danger" role="alert">
+                                <?=$upload_error?>
+                              </div>
+                            <?php endif; ?>
+                            <div class="form-group">
+                              <label for="logo_file">Seleziona un file immagine (PNG, JPG, GIF)</label>
+                              <input type="file" class="form-control-file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg,image/gif" required>
+                              <small class="form-text text-muted">Il file verrà salvato come logo_gruppo.png</small>
+                            </div>
+                            <input type="hidden" name="formAction" value="uploadLogo">
+                            <input type="hidden" name="groupId" value="<?=$id?>">
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
+                            <button type="submit" class="btn mb-2 btn-primary" id="uploadLogoBtn">
+                              <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                              Carica Logo
+                            </button>
+                          </div>
+                        </form>
                       </div>
                     </div>
                   </div>

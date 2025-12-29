@@ -144,6 +144,28 @@ try {
             handleDashboardRequest($requestMethod, $action, $id, $requestData);
             break;
             
+        case 'subgruppi':
+            require_once __DIR__ . '/endpoints/gruppi.php';
+            // Gestione endpoint /api/subgruppi/{id}/players
+            if (isset($segments[1]) && is_numeric($segments[1]) && isset($segments[2]) && $segments[2] === 'players') {
+                $subgruppoId = $segments[1];
+                $players = Gruppi::selectAllPlayersSottoGruppoById($subgruppoId);
+                $result = [];
+                foreach ($players as $p) {
+                    $status = ($p['pl_active'] == 1) ? "ON" : "OFF";
+                    $result[] = [
+                        'id' => (int)$p['pl_id'],
+                        'nome' => strtoupper($p['pl_nome']),
+                        'attivo' => $status,
+                        'ultimo_accesso' => substr($p['pl_player_ultimaDataEstesa'], 0, 10)
+                    ];
+                }
+                sendSuccessResponse($result);
+            } else {
+                sendErrorResponse("Endpoint non valido. Usa /api/subgruppi/{id}/players", 400);
+            }
+            break;
+            
         case 'formats':
             if ($requestMethod === 'GET') {
                 try {

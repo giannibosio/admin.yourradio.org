@@ -1,4 +1,4 @@
-<nav class="navbar navbar-expand-lg navbar-light bg-white flex-row border-bottom shadow">
+<nav class="navbar navbar-expand-lg navbar-light bg-white flex-row border-bottom shadow mb-0">
         <div class="container-fluid">
           <a class="navbar-brand mx-lg-1 mr-0" href="./index.php">
             <a class="navbar-brand mx-auto mt-2 flex-fill text-center" href="./index.php">
