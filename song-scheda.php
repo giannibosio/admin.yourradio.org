@@ -7,15 +7,79 @@ if(!isset($_SESSION["nome"])){
 }
 
 
-DB::init();
+// Inizializza il database solo se necessario (per operazioni che non possono essere fatte via API)
+// Su admin.yourradio.org il database potrebbe non essere accessibile direttamente
+try {
+    DB::init();
+    $dbAvailable = true;
+} catch (Exception $e) {
+    // Database non disponibile, useremo solo le API
+    $dbAvailable = false;
+    error_log("Database non disponibile, utilizzo solo API: " . $e->getMessage());
+}
+
 $songId = $_GET["id"] ?? '';
 // Se l'ID è 'nuova' o vuoto, non chiamare selectSongById
 if($songId === '' || $songId === 'nuova' || $songId === '0') {
     $s = [['sg_file' => '', 'sg_filesize' => '', 'sg_titolo' => '', 'sg_artista' => '', 'sg_anno' => '', 'sg_artista2' => '', 'sg_artista3' => '', 'sg_diritti' => '', 'sg_autori' => '', 'sg_casaDiscografica' => '', 'sg_etichetta' => '', 'sg_umoreId' => '', 'sg_nazione' => '', 'sg_id' => '', 'sg_attivo' => 0]];
 } else {
-    $s = Songs::selectSongById($songId);
-if(empty($s) || !isset($s[0])) {
-    $s = [['sg_file' => '', 'sg_filesize' => '', 'sg_titolo' => '', 'sg_artista' => '', 'sg_anno' => '', 'sg_artista2' => '', 'sg_artista3' => '', 'sg_diritti' => '', 'sg_autori' => '', 'sg_casaDiscografica' => '', 'sg_etichetta' => '', 'sg_umoreId' => '', 'sg_nazione' => '', 'sg_id' => '', 'sg_attivo' => 0]];
+    // Prova prima con il database, poi con l'API
+    $s = array();
+    if ($dbAvailable) {
+        try {
+            $s = Songs::selectSongById($songId);
+        } catch (Exception $e) {
+            error_log("Errore nel caricamento song dal database: " . $e->getMessage());
+            // Fallback all'API
+            $dbAvailable = false;
+        }
+    }
+    
+    // Se il database non è disponibile o la query è fallita, usa l'API
+    if (!$dbAvailable || empty($s) || !isset($s[0])) {
+        $apiUrl = "https://yourradio.org/api/songs/" . intval($songId);
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if($httpCode == 200) {
+            $apiResponse = json_decode($response, true);
+            if(isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+                // Converti il formato API al formato atteso dal codice esistente
+                $songData = $apiResponse['data'];
+                $s = [[
+                    'sg_id' => $songData['sg_id'] ?? $songId,
+                    'sg_file' => $songData['sg_file'] ?? '',
+                    'sg_filesize' => $songData['sg_filesize'] ?? '',
+                    'sg_titolo' => $songData['sg_titolo'] ?? '',
+                    'sg_artista' => $songData['sg_artista'] ?? '',
+                    'sg_anno' => $songData['sg_anno'] ?? '',
+                    'sg_artista2' => $songData['sg_artista2'] ?? '',
+                    'sg_artista3' => $songData['sg_artista3'] ?? '',
+                    'sg_diritti' => $songData['sg_diritti'] ?? '',
+                    'sg_autori' => $songData['sg_autori'] ?? '',
+                    'sg_casaDiscografica' => $songData['sg_casaDiscografica'] ?? '',
+                    'sg_etichetta' => $songData['sg_etichetta'] ?? '',
+                    'sg_umoreId' => $songData['sg_umoreId'] ?? '',
+                    'sg_nazione' => $songData['sg_nazione'] ?? '',
+                    'sg_attivo' => $songData['sg_attivo'] ?? 0,
+                    'sg_sex' => $songData['sg_sex'] ?? '',
+                    'sg_ritmoId' => $songData['sg_ritmoId'] ?? '',
+                    'sg_energia' => $songData['sg_energia'] ?? '',
+                    'sg_periodoId' => $songData['sg_periodoId'] ?? '',
+                    'sg_genereId' => $songData['sg_genereId'] ?? '',
+                    'sg_strategia' => $songData['sg_strategia'] ?? ''
+                ]];
+            }
+        }
+    }
+    
+    // Se ancora non abbiamo dati, usa valori di default
+    if(empty($s) || !isset($s[0])) {
+        $s = [['sg_file' => '', 'sg_filesize' => '', 'sg_titolo' => '', 'sg_artista' => '', 'sg_anno' => '', 'sg_artista2' => '', 'sg_artista3' => '', 'sg_diritti' => '', 'sg_autori' => '', 'sg_casaDiscografica' => '', 'sg_etichetta' => '', 'sg_umoreId' => '', 'sg_nazione' => '', 'sg_id' => '', 'sg_attivo' => 0]];
     }
 }
 

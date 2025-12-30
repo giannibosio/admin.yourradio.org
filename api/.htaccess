@@ -6,12 +6,7 @@ RewriteEngine On
 # Base path per le API
 RewriteBase /api/
 
-# Gestione CORS
-<IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-</IfModule>
+# Gestione CORS - Rimossa da qui, gestita in PHP (functions.php) per evitare conflitti
 
 # Routing per le API
 # Se il file o directory richiesto non esiste, passa tutto a index.php

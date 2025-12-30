@@ -12,28 +12,46 @@ if(isset($_GET['t']) && $_GET['t']=='logout'){
 
 $msg='';
 if(isset($_POST['inputLogin']) && isset($_POST['inputPassword'])){
-
-  $user=getUserByLogin($_POST['inputLogin'],$_POST['inputPassword']);
-
-
+  // Usa l'API per l'autenticazione invece della connessione diretta al database
+  $apiUrl = "https://yourradio.org/api/auth/login";
+  $postData = json_encode([
+    'login' => $_POST['inputLogin'],
+    'password' => $_POST['inputPassword']
+  ]);
   
-  $userLogin = ["login"=>$_POST['inputLogin'],"password"=>$_POST['inputPassword']];
-
-  DB::init();
-  $user=Login::selectByLogin($userLogin);
+  $ch = curl_init($apiUrl);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_POST, true);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'Content-Length: ' . strlen($postData)
+  ]);
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
   
-  if(empty($user) || count($user)==0){
-    $msg = "Login o password non riconosciute !";
-  }else{
-    if($user[0]['role']!=3){  
-      $msg = "Utente non autorizzato a accedere a questa area!";
-    }else{  
-    $lastLogin=Login::addLastLoginById($user[0]['id']);
-    $_SESSION["login"] = $user[0]['login'];
-    $_SESSION["password"] = $_POST['inputPassword'];
-    $_SESSION["nome"] = $user[0]['nome'];
-    $_SESSION["userID"] = $user[0]['id'];
-    header("location:".$startpage); 
+  $response = curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  
+  if($httpCode == 200) {
+    $apiResponse = json_decode($response, true);
+    if(isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+      $user = $apiResponse['data'];
+      $_SESSION["login"] = $user['login'];
+      $_SESSION["password"] = $_POST['inputPassword'];
+      $_SESSION["nome"] = $user['nome'];
+      $_SESSION["userID"] = $user['id'];
+      header("location:".$startpage);
+      exit;
+    } else {
+      $msg = isset($apiResponse['error']['message']) ? $apiResponse['error']['message'] : "Errore durante il login";
+    }
+  } else {
+    $apiResponse = json_decode($response, true);
+    if(isset($apiResponse['error']['message'])) {
+      $msg = $apiResponse['error']['message'];
+    } else {
+      $msg = "Errore durante la connessione al server di autenticazione";
     }
   }
 }

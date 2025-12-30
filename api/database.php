@@ -793,6 +793,33 @@ class Gruppi extends DB
     }
 }
 
+class Login extends DB
+{
+    public static function selectByLogin($userLogin)
+    {
+        $st = self::$db->prepare(
+            "SELECT * FROM user 
+            WHERE login = :login AND password = :password"
+        );
+        $st->execute([
+            ':login' => strval($userLogin['login']),
+            ':password' => strval(md5($userLogin['password']))
+        ]);
+        return $st->fetchAll();
+    }
+
+    public static function addLastLoginById($id)
+    {
+        $query = "UPDATE `user` set `user`.`ultimoAccesso` = :ultimoAccesso WHERE `user`.`id` = :id";
+        $st = self::$db->prepare($query);
+        $st->execute([
+            ':ultimoAccesso' => date("Y-m-d H:i:s"),
+            ':id' => $id
+        ]);
+        return true;
+    }
+}
+
 class Utenti extends DB
 {
     public static function selectUtenti()

@@ -144,6 +144,11 @@ try {
             handleDashboardRequest($requestMethod, $action, $id, $requestData);
             break;
             
+        case 'auth':
+            require_once __DIR__ . '/endpoints/auth.php';
+            handleAuthRequest($requestMethod, $action, $id, $requestData);
+            break;
+            
         case 'subgruppi':
             require_once __DIR__ . '/endpoints/gruppi.php';
             // Gestione endpoint /api/subgruppi/{id}/players

@@ -52,13 +52,35 @@ function handleCors() {
     
     // PHP 5.6 compatibility: use global variable
     $allowedOrigins = isset($GLOBALS['ALLOWED_ORIGINS']) ? $GLOBALS['ALLOWED_ORIGINS'] : array();
-    if (in_array($origin, $allowedOrigins)) {
-        header("Access-Control-Allow-Origin: $origin");
+    
+    // Aggiungi origini comuni per sviluppo locale
+    $localOrigins = array(
+        'http://localhost',
+        'http://localhost:3000',
+        'http://localhost:8080',
+        'http://127.0.0.1',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:8080'
+    );
+    
+    // Combina le origini consentite con quelle locali
+    $allAllowedOrigins = array_merge($allowedOrigins, $localOrigins);
+    
+    // Imposta l'header CORS se l'origine è nella lista consentita o è localhost
+    // IMPORTANTE: impostare solo una volta per evitare errori "multiple values"
+    if (!empty($origin)) {
+        // Controlla se l'origine è nella lista consentita o è localhost
+        if (in_array($origin, $allAllowedOrigins) || strpos($origin, 'localhost') !== false || strpos($origin, '127.0.0.1') !== false) {
+            header("Access-Control-Allow-Origin: $origin", false); // false = non sovrascrivere se già presente
+        }
     }
     
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
-    header("Access-Control-Max-Age: 3600");
+    // Imposta gli altri header CORS solo se non sono già stati impostati
+    if (!headers_sent()) {
+        header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS", false);
+        header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With", false);
+        header("Access-Control-Max-Age: 3600", false);
+    }
     
     if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         http_response_code(200);
