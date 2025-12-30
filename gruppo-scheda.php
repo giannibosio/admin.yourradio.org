@@ -10,24 +10,59 @@ if(!isset($_SESSION["nome"])){
 
 DB::init();
 
-//scarico gruppo
-$g=Gruppi::selectGruppoById($_GET["id"] ?? '');
-if(!empty($g) && isset($g[0])) {
-    $active=$g[0]['gr_active'] ?? '';
-    $id=$g[0]['gr_id'] ?? '';
-    $nome=strtoupper($g[0]['gr_nome'] ?? '');
-    $rss_id=$g[0]['rss_id'] ?? '';
-    $data_creazione=$g[0]['gr_dataCreazione'] ?? '';
-    $tot_players=$g[0]['tot_player'] ?? 0;
-    $note=$g[0]['gr_note'] ?? '';
+// Carica il gruppo dall'API invece del database locale
+$gruppoId = $_GET["id"] ?? '';
+$gruppoData = null;
+
+if(!empty($gruppoId) && $gruppoId != 'nuova') {
+    // Chiama l'API per ottenere i dati del gruppo
+    $apiUrl = "https://yourradio.org/api/gruppi/" . intval($gruppoId);
+    $ch = curl_init($apiUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if($httpCode == 200) {
+        $apiResponse = json_decode($response, true);
+        if(isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+            $gruppoData = $apiResponse['data'];
+        }
+    }
+}
+
+// Estrai i dati del gruppo
+if($gruppoData) {
+    $active = isset($gruppoData['attivo']) ? $gruppoData['attivo'] : 0;
+    $id = isset($gruppoData['id']) ? $gruppoData['id'] : '';
+    $nome = isset($gruppoData['nome']) ? strtoupper($gruppoData['nome']) : '';
+    $rss_id = isset($gruppoData['rss_id']) ? $gruppoData['rss_id'] : '';
+    $data_creazione = isset($gruppoData['data_creazione']) ? $gruppoData['data_creazione'] : '';
+    $tot_players = isset($gruppoData['tot_player']) ? $gruppoData['tot_player'] : 0;
+    $note = isset($gruppoData['note']) ? $gruppoData['note'] : '';
 } else {
-    $active='';
-    $id='';
-    $nome='';
-    $rss_id='';
-    $data_creazione='';
-    $tot_players=0;
-    $note='';
+    $active = '';
+    $id = '';
+    $nome = '';
+    $rss_id = '';
+    $data_creazione = '';
+    $tot_players = 0;
+    $note = '';
+}
+
+// Crea un array compatibile con il codice esistente
+$g = array();
+if($gruppoData) {
+    $g[0] = array(
+        'gr_active' => $active,
+        'gr_id' => $id,
+        'gr_nome' => $nome,
+        'rss_id' => $rss_id,
+        'gr_dataCreazione' => $data_creazione,
+        'tot_player' => $tot_players,
+        'gr_note' => $note
+    );
 }
 
 if(!isset($id) || $id==0 || $id==''){
@@ -50,12 +85,7 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
   if($_POST["formAction"]=="back"){
     header("location:gruppi.php");
   }
-  if($_POST["formAction"]=="delete"){
-    $_POST["formAction"]='';
-    $res=Gruppi::deleteGruppoById($_GET["id"] ?? '');
-    deleteGroupFolder($id,$nome);
-    header("location:gruppi.php");
-  }
+  // La cancellazione del gruppo è ora gestita tramite API
   if($_POST["formAction"]=="deleteSubGroup"){
     $_POST["formAction"]='';
     $res=Gruppi::deleteSottoGruppoByID($_POST['SubGroupSelId'] ?? '');
@@ -68,39 +98,7 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
       $_GET["id"]=Gruppi::updateGruppo($_POST);
       $_POST["formAction"]='';
   }
-  if($_POST["formAction"]=="uploadLogo"){
-      $_POST["formAction"]='';
-      $gruppo_nome = strtolower($nome);
-      $path = PLAYER_PATH . $gruppo_nome . "/";
-      
-      // Verifica che le cartelle esistano
-      verifyGroupFolder($id, $gruppo_nome);
-      
-      // Percorsi completi per i file
-      $logo_path = $path . "images/logo_gruppo.png";
-      $logo_thumb_path = $path . "images/thumbnail/logo_gruppo.png";
-      
-      // Gestione upload
-      if(isset($_FILES['logo_file']) && $_FILES['logo_file']['error'] == 0) {
-          $allowed_types = array('image/png', 'image/jpeg', 'image/jpg', 'image/gif');
-          $file_type = $_FILES['logo_file']['type'];
-          
-          if(in_array($file_type, $allowed_types)) {
-              // Carica il file principale
-              if(move_uploaded_file($_FILES['logo_file']['tmp_name'], $logo_path)) {
-                  // Crea una copia per la thumbnail (puoi anche ridimensionarla se necessario)
-                  copy($logo_path, $logo_thumb_path);
-                  $upload_success = true;
-              } else {
-                  $upload_error = "Errore durante il caricamento del file.";
-              }
-          } else {
-              $upload_error = "Tipo di file non supportato. Usa PNG, JPG o GIF.";
-          }
-      } else {
-          $upload_error = "Nessun file caricato o errore durante l'upload.";
-      }
-  }
+  // L'upload del logo è ora gestito tramite API
 
 }
 include_once('inc/head.php');
@@ -172,7 +170,7 @@ $players_table.='
 <!-- table '.$tableId.' -->
 <div class="card shadow mb-6" style="border: 1px solid #666">
 <div class="card-body">
-<h5 class="card-title">Players di '.strtoupper($g[0]['gr_nome']).'</h5>
+<h5 class="card-title">Players di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
 <!-- table -->
 <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
 <thead>
@@ -264,7 +262,7 @@ $jingles_table.='
 <!-- table '.$tableId.' -->
 <div class="card shadow mb-6" style="border: 1px solid #666">
 <div class="card-body">
-<h5 class="card-title">Jingles di '.strtoupper($g[0]['gr_nome']).'</h5>
+<h5 class="card-title">Jingles di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
 <!-- table -->
 <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
 <thead>
@@ -363,7 +361,7 @@ $spot_net_table.='
 <!-- table '.$tableId.' -->
 <div class="card shadow mb-6" style="border: 1px solid #666">
 <div class="card-body">
-<h5 class="card-title">Spot Network di '.strtoupper($g[0]['gr_nome']).'</h5>
+<h5 class="card-title">Spot Network di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
 <!-- table -->
 <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
 <thead>
@@ -462,7 +460,7 @@ $spot_loc_table.='
 <!-- table '.$tableId.' -->
 <div class="card shadow mb-6" style="border: 1px solid #666">
 <div class="card-body">
-<h5 class="card-title">Spot Locali di '.strtoupper($g[0]['gr_nome']).'</h5>
+<h5 class="card-title">Spot Locali di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
 <!-- table -->
 <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
 <thead>
@@ -675,11 +673,7 @@ $script='
   $( "#update" ).click(function() {
     $("#formAction").val("update");
   });
-  $( "#delete" ).click(function() {
-    $("#formAction").val("delete");
-    console.log("cancella scheda ");
-    $( "#scheda-gruppo" ).submit();
-  });
+  // La cancellazione del gruppo è ora gestita tramite API (vedi sotto)
   $( ".back-lista" ).click(function() {
     $("#formAction").val("back");
     console.log("torna alla lista");
@@ -754,31 +748,106 @@ $script='
     }
   });
 
-  // Gestione upload logo
+  // Gestione upload logo tramite API
   $("#uploadLogoForm").on("submit", function(e) {
     e.preventDefault();
     var formData = new FormData(this);
     var $btn = $("#uploadLogoBtn");
     var $spinner = $btn.find(".spinner-border");
+    var $modal = $("#uploadLogoModal");
+    var gruppoId = $("#uploadLogoForm input[name=\'groupId\']").val();
     
     // Mostra spinner
     $spinner.removeClass("d-none");
     $btn.prop("disabled", true);
     
+    // Rimuovi eventuali messaggi di errore precedenti
+    $modal.find(".alert").remove();
+    
     $.ajax({
-      url: window.location.href,
+      url: "https://yourradio.org/api/gruppi/" + gruppoId + "/logo",
       type: "POST",
       data: formData,
       processData: false,
       contentType: false,
       success: function(response) {
-        // Ricarica la pagina per mostrare il nuovo logo
-        window.location.reload();
+        if (response.success) {
+          // Mostra messaggio di successo
+          var successMsg = \'<div class="alert alert-success" role="alert">Logo caricato con successo!</div>\';
+          $modal.find(".modal-body").prepend(successMsg);
+          
+          // Ricarica la pagina dopo 1 secondo per mostrare il nuovo logo
+          setTimeout(function() {
+            window.location.reload();
+          }, 1000);
+        } else {
+          var errorMsg = \'<div class="alert alert-danger" role="alert">\' + (response.error ? response.error.message : "Errore sconosciuto") + \'</div>\';
+          $modal.find(".modal-body").prepend(errorMsg);
+          $spinner.addClass("d-none");
+          $btn.prop("disabled", false);
+        }
       },
       error: function(xhr, status, error) {
-        alert("Errore durante il caricamento del logo: " + error);
+        var errorResponse = xhr.responseJSON;
+        var errorMsg = \'<div class="alert alert-danger" role="alert">\' + 
+          (errorResponse && errorResponse.error ? errorResponse.error.message : "Errore durante il caricamento del logo: " + error) + 
+          \'</div>\';
+        $modal.find(".modal-body").prepend(errorMsg);
         $spinner.addClass("d-none");
         $btn.prop("disabled", false);
+      }
+    });
+  });
+
+  // Gestione cancellazione gruppo tramite API
+  $("#confirmDeleteGruppo").on("click", function() {
+    var gruppoId = '.json_encode($id != "nuova" ? $id : null).';
+    var $btn = $(this);
+    var $spinner = $btn.find(".spinner-border");
+    var $modal = $("#deleteGruppoModal");
+    var $cancelBtn = $("#cancelDeleteBtn");
+    var $closeBtn = $("#closeDeleteModal");
+    
+    // Disabilita i pulsanti e mostra lo spinner
+    $btn.prop("disabled", true);
+    $cancelBtn.prop("disabled", true);
+    $closeBtn.prop("disabled", true);
+    $spinner.removeClass("d-none");
+    
+    // Mostra spinner anche nel body della modale
+    $modal.find(".modal-body").html(\'<div class="text-center"><div class="spinner-border text-danger" role="status"><span class="sr-only">Eliminazione in corso...</span></div><p class="mt-3">Eliminazione del gruppo in corso...</p></div>\');
+    
+    $.ajax({
+      url: "https://yourradio.org/api/gruppi/" + gruppoId,
+      type: "DELETE",
+      dataType: "json",
+      success: function(response) {
+        if (response.success) {
+          // Mostra messaggio di successo
+          $modal.find(".modal-body").html(\'<div class="alert alert-success" role="alert"><strong>Gruppo eliminato con successo!</strong></div>\');
+          // Reindirizza a gruppi.php dopo 1 secondo
+          setTimeout(function() {
+            window.location.href = "gruppi.php";
+          }, 1000);
+        } else {
+          var errorMsg = \'<div class="alert alert-danger" role="alert"><strong>Errore:</strong> \' + (response.error ? response.error.message : "Errore sconosciuto") + \'</div>\';
+          $modal.find(".modal-body").html(errorMsg);
+          $btn.prop("disabled", false);
+          $cancelBtn.prop("disabled", false);
+          $closeBtn.prop("disabled", false);
+          $spinner.addClass("d-none");
+        }
+      },
+      error: function(xhr, status, error) {
+        var errorResponse = xhr.responseJSON;
+        var errorMsg = \'<div class="alert alert-danger" role="alert"><strong>Errore:</strong> \' + 
+          (errorResponse && errorResponse.error ? errorResponse.error.message : "Errore durante l\'eliminazione del gruppo: " + error) + 
+          \'</div>\';
+        $modal.find(".modal-body").html(errorMsg);
+        $btn.prop("disabled", false);
+        $cancelBtn.prop("disabled", false);
+        $closeBtn.prop("disabled", false);
+        $spinner.addClass("d-none");
       }
     });
   });
@@ -1033,7 +1102,7 @@ $script='
 
                       <button title="salva" class="btn btn-outline-success" type="submit" id="update"><span class="fe fe-save fe-16"></span></button>
                       <button title="lista" class="btn btn-outline-success back-lista" ><span class="fe fe-list fe-16"></span></button>
-                      <button <?=$disabled?>title="cancella" type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#verticalModal"><span class="fe fe-trash fe-16"></span></button>
+                      <button <?=$disabled?>title="cancella" type="button" class="btn btn-outline-danger" id="btnDeleteGruppo" data-toggle="modal" data-target="#deleteGruppoModal"><span class="fe fe-trash fe-16"></span></button>
 
                     </div>
 
@@ -1041,20 +1110,38 @@ $script='
 
 
 
-                  <!-- Modal Cancella -->
-                  <div class="modal fade" id="verticalModal" tabindex="-1" role="dialog" aria-labelledby="verticalModalTitle" aria-hidden="true" >
+                  <!-- Modal Cancella Gruppo -->
+                  <div class="modal fade" id="deleteGruppoModal" tabindex="-1" role="dialog" aria-labelledby="deleteGruppoModalLabel" aria-hidden="true" data-backdrop="static">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                       <div class="modal-content">
                         <div class="modal-header">
-                          <h5 class="modal-title" id="verticalModalTitle">Cancella Gruppo</h5>
-                          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                          <h5 class="modal-title" id="deleteGruppoModalLabel">Cancella Gruppo</h5>
+                          <button type="button" class="close" data-dismiss="modal" aria-label="Close" id="closeDeleteModal">
                             <span aria-hidden="true">&times;</span>
                           </button>
                         </div>
-                        <div class="modal-body">Eliminare definitivamente il gruppo di <?=strtoupper($nome)?>?</div>
+                        <div class="modal-body">
+                          <div class="alert alert-danger" role="alert">
+                            <strong>ATTENZIONE!</strong> Stai per eliminare definitivamente il gruppo <strong><?=strtoupper($nome)?></strong>.
+                          </div>
+                          <p>Questa operazione eliminerà:</p>
+                          <ul>
+                            <li>Tutti i <strong>player</strong> di questo gruppo</li>
+                            <li>Tutti i <strong>sottogruppi</strong></li>
+                            <li>Tutti i <strong>jingles</strong></li>
+                            <li>Tutti gli <strong>Spot Net</strong></li>
+                            <li>Tutti gli <strong>Spot Loc</strong></li>
+                            <li>L\'<strong>abbinamento alle rubriche</strong></li>
+                            <li>La <strong>cartella</strong> del gruppo e tutti i suoi contenuti</li>
+                          </ul>
+                          <p class="text-danger"><strong>Questa operazione è irreversibile!</strong></p>
+                        </div>
                         <div class="modal-footer">
-                          <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-                          <button class="btn mb-2 btn-danger" id="delete">Cancella</button>
+                          <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal" id="cancelDeleteBtn">Annulla</button>
+                          <button type="button" class="btn mb-2 btn-danger" id="confirmDeleteGruppo">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            Elimina Gruppo
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1143,16 +1230,6 @@ $script='
                         </div>
                         <form id="uploadLogoForm" method="post" enctype="multipart/form-data">
                           <div class="modal-body">
-                            <?php if(isset($upload_success) && $upload_success): ?>
-                              <div class="alert alert-success" role="alert">
-                                Logo caricato con successo!
-                              </div>
-                            <?php endif; ?>
-                            <?php if(isset($upload_error)): ?>
-                              <div class="alert alert-danger" role="alert">
-                                <?=$upload_error?>
-                              </div>
-                            <?php endif; ?>
                             <div class="form-group">
                               <label for="logo_file">Seleziona un file immagine (PNG, JPG, GIF)</label>
                               <input type="file" class="form-control-file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg,image/gif" required>

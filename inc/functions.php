@@ -344,6 +344,33 @@ function deleteGroupFolder($id,$name) {
     rmdir($path);
 }
 
+function createGroupFolderOnServer($groupName) {
+	// Crea la cartella sul server esterno (stesso flusso dell'upload delle songs)
+	// Path: /var/www/vhosts/yourradio.org/httpdocs/player/[nome del gruppo minuscolo]
+	$folderName = strtolower(trim($groupName));
+	if(empty($folderName)) {
+		return false;
+	}
+	
+	$remotePath = "/var/www/vhosts/yourradio.org/httpdocs/player/" . $folderName;
+	
+	// Crea la directory direttamente (stesso metodo usato per le songs nell'API)
+	// Verifica se la directory padre esiste o è accessibile
+	$parentDir = dirname($remotePath);
+	
+	// Prova a creare la cartella direttamente (stesso approccio delle songs)
+	if (!is_dir($remotePath)) {
+		// Crea la directory se non esiste (stesso metodo dell'API songs)
+		if (!mkdir($remotePath, 0755, true)) {
+			error_log("Errore nella creazione della cartella per gruppo '{$groupName}': {$remotePath}");
+			// Non blocchiamo la creazione del gruppo nel DB anche se la cartella non viene creata
+			return false;
+		}
+	}
+	
+	return true;
+}
+
 
 function getUserByLogin($login,$pass){
 

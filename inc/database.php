@@ -407,11 +407,48 @@ class Gruppi extends DB
 
     public static function createGruppo($nome)
     {
-        /// crea nuovo gruppo col nome
+        /// crea nuovo gruppo col nome (MAIUSCOLO)
+        $nome = strtoupper(trim($nome));
         $st = self::$db->prepare(
             "INSERT INTO `gruppi` set 
-            gr_nome   = :nome,
-            gr_dataCreazione = :dataCreazione"
+            gr_active = '0',
+            gr_nome = :nome,
+            gr_dataCreazione = :dataCreazione,
+            gr_jingle_canzone = '0',
+            gr_sel_top40 = '0',
+            gr_format_ok = '1',
+            gr_format = '0',
+            gr_format_new = '0',
+            gr_format_def_new = '0',
+            gr_format_def = '0',
+            gr_format_fascia1 = '0',
+            gr_format_fascia2 = '0',
+            gr_format_fascia3 = '0',
+            gr_format_fascia4 = '0',
+            gr_format_fascia5 = '0',
+            gr_idformat_def = '0',
+            gr_idformat_fascia1 = '0',
+            gr_idformat_fascia2 = '0',
+            gr_idformat_fascia3 = '0',
+            gr_idformat_fascia4 = '0',
+            gr_idformat_fascia5 = '0',
+            gr_rotator_idformat = '0',
+            gr_rotator_format = '16777216',
+            gr_rotator_song = '4',
+            gr_time = '0',
+            gr_orariPreferiti = '111111',
+            gr_fascePreferite = '1111111111111',
+            gr_ds_active = '1',
+            gr_ds_template = '1',
+            gr_ds_time = '1',
+            gr_ds_campagna_id = '0',
+            gr_ds_logo = NULL,
+            gr_ds_sottologo = NULL,
+            gr_ds_sfondo = NULL,
+            gr_ds_rss = NULL,
+            gr_server_file = 'http://www.yourradio.org',
+            gr_nat_port = '',
+            gr_abilitaPassaggi = '0'"
         );
         $st->execute(array(
             ':nome' => $nome,

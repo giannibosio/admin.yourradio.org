@@ -142,3 +142,74 @@ function countFilesInDirectory($dir) {
     return $totfile;
 }
 
+/**
+ * Cancella ricorsivamente una directory e tutti i suoi contenuti
+ * @param string $dir Path della directory da cancellare
+ * @return bool True se la cancellazione è riuscita, False altrimenti
+ */
+function deleteDirectory($dir) {
+    if (!is_dir($dir)) {
+        return true; // La directory non esiste, consideriamo il successo
+    }
+    
+    $files = array_diff(scandir($dir), array('.', '..'));
+    foreach ($files as $file) {
+        $path = $dir . '/' . $file;
+        if (is_dir($path)) {
+            if (!deleteDirectory($path)) {
+                return false;
+            }
+        } else {
+            if (!unlink($path)) {
+                error_log("Errore: Impossibile cancellare il file: {$path}");
+                return false;
+            }
+        }
+    }
+    
+    if (!rmdir($dir)) {
+        error_log("Errore: Impossibile cancellare la directory: {$dir}");
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Crea la struttura di cartelle per un nuovo gruppo
+ * @param string $groupName Nome del gruppo (verrà convertito in minuscolo)
+ * @return bool True se la creazione è riuscita, False altrimenti
+ */
+function createGroupFolderStructure($groupName) {
+    $folderName = strtolower(trim($groupName));
+    $basePath = "/var/www/vhosts/yourradio.org/httpdocs/player/" . $folderName;
+    
+    // Crea la cartella principale se non esiste
+    if (!is_dir($basePath)) {
+        if (!mkdir($basePath, 0755, true)) {
+            error_log("Errore: Impossibile creare la directory principale: {$basePath}");
+            return false;
+        }
+    }
+    
+    // Crea le sottocartelle richieste
+    $subfolders = array(
+        'images/thumbnail',
+        'jingle',
+        'spot/loc',
+        'xml'
+    );
+    
+    foreach ($subfolders as $subfolder) {
+        $fullPath = $basePath . '/' . $subfolder;
+        if (!is_dir($fullPath)) {
+            if (!mkdir($fullPath, 0755, true)) {
+                error_log("Errore: Impossibile creare la sottodirectory: {$fullPath}");
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+

@@ -7,42 +7,85 @@ if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
 
-DB::init();
-if(isset($_GET["newName"])){
-  $id=Gruppi::createGruppo($_GET["newName"]);
-  header("location:gruppo-scheda.php?id=".$id);
-}
 include_once('inc/head.php');
 
-$gruppi=Gruppi::selectAll();
-$tabs = ''; // Inizializza la variabile
+$tabs = '<div id="gruppi-container" class="row"><div class="col-12 text-center"><div class="spinner-border text-primary" role="status"><span class="sr-only">Caricamento...</span></div></div></div>'; // Container per i gruppi caricati via API
 $scripts = ''; // Inizializza anche $scripts per evitare warning
-
-foreach($gruppi as $g){
-  if($g['gr_active']==1){$active="primary";$active_text="attivo";}else{$active="secondary";$active_text="disabilitato";}
-  $tabs.='
-  <div class="col-md-6 col-xl-3 mb-4">
-    <div class="card shadow bg-'.$active.' text-white" >
-      <div class="card-body" style="cursor:pointer;" onclick="window.location = \'gruppo-scheda.php?id='.$g['gr_id'].'\';">
-        <div class="row align-items-center">
-          <div class="col pr-0">
-            <p class="h5 text-white mb-0">'.strtoupper($g['gr_nome']).'</p>
-            <span class="h3 small text-white">'.$g['tot_player'].' players</span><br>
-            <span class="h3 small text-white">'.$active_text.'</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  ';
-}
 
 $script='
 <script>
+  // Carica i gruppi dall\'API
+  function loadGruppi() {
+    $.ajax({
+      url: "https://yourradio.org/api/gruppi",
+      type: "GET",
+      dataType: "json",
+      success: function(response) {
+        console.log("=== GRUPPI DALL\'API ===");
+        console.log(JSON.stringify(response, null, 2));
+        if (response.success && response.data) {
+          var html = "";
+          response.data.forEach(function(g) {
+            var active = g.attivo == 1 ? "primary" : "secondary";
+            var active_text = g.attivo == 1 ? "attivo" : "disabilitato";
+            html += \'<div class="col-md-6 col-xl-3 mb-4">\';
+            html += \'<div class="card shadow bg-\' + active + \' text-white">\';
+            html += \'<div class="card-body" style="cursor:pointer;" onclick="window.location = \\\'gruppo-scheda.php?id=\' + g.id + \'\\\';">\';
+            html += \'<div class="row align-items-center">\';
+            html += \'<div class="col pr-0">\';
+            html += \'<p class="h5 text-white mb-0">\' + g.nome + \'</p>\';
+            html += \'<span class="h3 small text-white">\' + g.players + \' players</span><br>\';
+            html += \'<span class="h3 small text-white">\' + active_text + \'</span>\';
+            html += \'</div></div></div></div></div>\';
+          });
+          $("#gruppi-container").html(html);
+        } else {
+          $("#gruppi-container").html(\'<div class="col-12"><div class="alert alert-danger">Errore nel caricamento dei gruppi</div></div>\');
+        }
+      },
+      error: function(xhr, status, error) {
+        console.error("Errore nel caricamento dei gruppi:", error);
+        $("#gruppi-container").html(\'<div class="col-12"><div class="alert alert-danger">Errore nel caricamento dei gruppi: \' + error + \'</div></div>\');
+      }
+    });
+  }
+
+  // Carica i gruppi al caricamento della pagina
+  $(document).ready(function() {
+    loadGruppi();
+  });
+
+  // Gestione creazione nuovo gruppo
   $("#addNewGroup").click(function() {
-    $("#newSubGroupName").val($("#newName").val());
-    console.log("aggiungi sottogruppo "+$("#newName").val());
-    $("#newGroupForm").submit();
+    var groupName = $("#newName").val().trim().toUpperCase();
+    if(groupName === "") {
+      alert("Inserisci un nome per il gruppo");
+      return;
+    }
+    console.log("aggiungi nuovo gruppo: " + groupName);
+    
+    // Chiama l\'API per creare il gruppo (nome già in maiuscolo)
+    $.ajax({
+      url: "https://yourradio.org/api/gruppi",
+      type: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ nome: groupName }),
+      dataType: "json",
+      success: function(response) {
+        if (response.success && response.data && response.data.id) {
+          // Chiudi il modale
+          $("#newGroupAddModal").modal("hide");
+          // Reindirizza alla scheda del nuovo gruppo
+          window.location = "gruppo-scheda.php?id=" + response.data.id;
+        } else {
+          alert("Errore nella creazione del gruppo");
+        }
+      },
+      error: function(xhr, status, error) {
+        console.error("Errore nella creazione del gruppo:", error);
+        alert("Errore nella creazione del gruppo: " + error);
+      }
+    });
   });
 </script>';
 
@@ -88,17 +131,17 @@ $script='
                           </button>
                         </div>
                         <div class="modal-body">
-                          <form id="newGroupForm">
+                          <form id="newGroupForm" action="gruppi.php" method="get">
                             <div class="form-group">
                               <label for="recipient-name" class="col-form-label">Nome del Gruppo:</label>
-                              <input type="text" style="text-transform: uppercase" class="form-control" name="newName" id="newName">
+                              <input type="text" style="text-transform: uppercase" class="form-control" name="newName" id="newName" required>
                               (non sara' possibile cambiarlo!)
                             </div>
                           </form>
                         </div>
                         <div class="modal-footer">
                           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-                          <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal" id="addNewGroup">Aggiungi</button>
+                          <button type="button" class="btn mb-2 btn-primary" id="addNewGroup">Aggiungi</button>
                         </div>
                       </div>
                     </div>
