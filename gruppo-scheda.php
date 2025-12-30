@@ -82,7 +82,22 @@ if(!isset($id) || $id==0 || $id==''){
   $disabled="";
   $title=$nome;
 
-  verifyGroupFolder($id,strtolower($nome));
+  // Verifica/crea la cartella solo se siamo sul server locale
+  // Su admin.yourradio.org non abbiamo accesso diretto al filesystem del server remoto
+  // Le cartelle vengono gestite dall'API sul server yourradio.org
+  // Controlla se siamo su admin.yourradio.org - in quel caso salta la verifica
+  $isRemoteServer = isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'admin.yourradio.org') !== false;
+  if (!$isRemoteServer && function_exists('verifyGroupFolder')) {
+    try {
+      @verifyGroupFolder($id,strtolower($nome));
+    } catch (Exception $e) {
+      // Ignora errori di filesystem - le cartelle sono gestite dall'API
+      error_log("Errore nella verifica cartella gruppo (ignorato): " . $e->getMessage());
+    } catch (Error $e) {
+      // Ignora anche errori fatali
+      error_log("Errore fatale nella verifica cartella gruppo (ignorato): " . $e->getMessage());
+    }
+  }
 }
 
 
@@ -977,6 +992,8 @@ $script='
     $(".tabs-scheda-gruppo ").hide();
     $(".tab-players").fadeIn("slow");
     document.cookie="gruppo-tab=players";
+    // Chiudi il child-tab (scheda player) per mostrare la lista dei player
+    closeChildTab("tab-players");
   });
 
   $( "#gruppo-tab-jingles" ).click(function() {
@@ -1050,19 +1067,16 @@ $script='
                 <div class="card-header">
                   
                   <div class="logo-scheda-gruppo mt-0">
-                    <h4>Gruppo</h4>
-                    <h2 class="page-title"><?=$title?></h2>
+                    
+                    
 
-                    <img src="https://yourradio.org/player/<?=strtolower($g[0]['gr_nome'])?>/images/logo_gruppo.png" >
-                    <div class="mt-2">
-                      <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#uploadLogoModal">
-                        CAMBIO LOGO
-                      </button>
-                    </div>
+                    <img class="rounded-4 mt-2 img-fluid mx-auto d-block" src="https://yourradio.org/player/<?=strtolower($g[0]['gr_nome'])?>/images/logo_gruppo.png" >
+                    <h2 class="mt-2 page-title text-uppercase"><?=$title?></h2>
+                    
                     </div>
                 </div>
 
-                <div class="card-body gruppo-scheda">
+                <div class="card-body gruppo-scheda pt-0">
                   
 
                   <!--<ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
@@ -1081,18 +1095,20 @@ $script='
                     
                     <!-- ACTIVE -->
                     <div class="form-row tab-scheda ">
-                      <div class="mb-3">
-                        <div class="custom-control custom-switch">
-                          <input type="checkbox" class="custom-control-input" <?=$chbox_active?> id="active" name="active" value="1">
-                          <label class="custom-control-label" for="active"><?=$chbox_active_lab?></label>
-                        </div>
+                      
+                    <div class="col-md-12 text-center mb-2">
+                      <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" <?=$chbox_active?> id="active" name="active" value="1">
+                        <label class="custom-control-label" for="active"><?=$chbox_active_lab?></label>
                       </div>
-                    
+                    </div>
+
+                      <!--
                       <div class="col-md-12 mb-3">
                         <label for="validationCustom3">Nome <i>(non modificabile)</i></label>
                         <input disabled type="text" class="form-control" id="validationCustom3" value="<?=$nome?>" required>
                       </div>
-
+                    -->
                     </div>
                     
 
@@ -1122,6 +1138,7 @@ $script='
                               <li class="nav-item">
                                 <a title="Spot Locali" class="nav-link px-3 gruppo-scheda" id="gruppo-tab-selector" data-toggle="tab" href="#pills-contact2" role="tab" aria-controls="selector" aria-selected="false">Selector</a>
                               </li>
+
                             </ul>
 
                             <div class="form-row tabs-scheda-gruppo tab-sottogruppi">
@@ -1195,7 +1212,7 @@ $script='
                       <button title="salva" class="btn btn-outline-success" type="submit" id="update"><span class="fe fe-save fe-16"></span></button>
                       <button title="lista" class="btn btn-outline-success back-lista" ><span class="fe fe-list fe-16"></span></button>
                       <button <?=$disabled?>title="cancella" type="button" class="btn btn-outline-danger" id="btnDeleteGruppo" data-toggle="modal" data-target="#deleteGruppoModal"><span class="fe fe-trash fe-16"></span></button>
-
+                      <button title="Upload logo" type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#uploadLogoModal"><span class="fe fe-image fe-16"></span></button>
                     </div>
 
                   </form>
