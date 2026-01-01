@@ -153,7 +153,8 @@ class Songs extends DB
         // Rimuovi campi che non devono essere inseriti
         unset($songData['job']);
         unset($songData['formAction']);
-        unset($songData['sg_id']);
+        // Mantieni sg_id se viene passato esplicitamente (per import)
+        // unset($songData['sg_id']); // Commentato per permettere l'inserimento con sg_id specifico
         unset($songData['formats']);
         
         // Gestisci sg_file: se è vuoto, '0' o non presente, non includerlo (per evitare violazioni di vincolo UNIQUE)
@@ -178,7 +179,8 @@ class Songs extends DB
         $st->execute($params);
         
         // Ottieni l'ID della song appena creata
-        $newId = self::$db->lastInsertId();
+        // Se sg_id è stato specificato, usalo, altrimenti usa lastInsertId
+        $newId = isset($songData['sg_id']) ? (int)$songData['sg_id'] : self::$db->lastInsertId();
         
         // Aggiungi i format se forniti
         if ($formatIds !== null && $newId > 0) {

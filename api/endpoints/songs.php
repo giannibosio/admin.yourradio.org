@@ -12,7 +12,88 @@
 function handleSongsRequest($method, $action, $id, $data) {
     switch ($method) {
         case 'GET':
-            if ($id === null && $action === '') {
+            if ($id === null && $action === 'maxids') {
+                // Recupera i valori massimi di sg_id e sg_file
+                try {
+                    $queryMaxSgId = "SELECT sg_id FROM songs WHERE sg_id IS NOT NULL ORDER BY sg_id DESC LIMIT 1";
+                    $queryMaxSgFile = "SELECT sg_file FROM songs WHERE sg_file IS NOT NULL ORDER BY sg_file DESC LIMIT 1";
+                    
+                    $st1 = Songs::$db->prepare($queryMaxSgId);
+                    $st1->execute();
+                    $result1 = $st1->fetch(PDO::FETCH_ASSOC);
+                    
+                    $st2 = Songs::$db->prepare($queryMaxSgFile);
+                    $st2->execute();
+                    $result2 = $st2->fetch(PDO::FETCH_ASSOC);
+                    
+                    $maxSgId = isset($result1['sg_id']) && $result1['sg_id'] !== null ? (int)$result1['sg_id'] : 0;
+                    $maxSgFile = isset($result2['sg_file']) && $result2['sg_file'] !== null ? (int)$result2['sg_file'] : 0;
+                    
+                    sendSuccessResponse([
+                        'max_sg_id' => $maxSgId,
+                        'max_sg_file' => $maxSgFile,
+                        'next_sg_id' => $maxSgId + 1,
+                        'next_sg_file' => $maxSgFile + 1
+                    ]);
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nel recupero dei valori massimi: " . $e->getMessage(), 500);
+                }
+            } elseif ($id === null && $action === 'byfilename') {
+                // Recupera song per sg_filename_wm
+                if (!isset($_GET['filename'])) {
+                    sendErrorResponse("Parametro filename richiesto", 400);
+                }
+                try {
+                    $filename = $_GET['filename'];
+                    $query = "SELECT * FROM songs WHERE sg_filename_wm = :filename LIMIT 1";
+                    $st = Songs::$db->prepare($query);
+                    $st->execute([':filename' => $filename]);
+                    $song = $st->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($song) {
+                        sendSuccessResponse([
+                            'sg_id' => (int)$song['sg_id'],
+                            'sg_file' => isset($song['sg_file']) ? (int)$song['sg_file'] : null,
+                            'sg_filename_wm' => $song['sg_filename_wm'],
+                            'exists' => true,
+                            'song' => $song
+                        ]);
+                    } else {
+                        sendSuccessResponse([
+                            'sg_id' => null,
+                            'sg_file' => null,
+                            'sg_filename_wm' => $filename,
+                            'exists' => false
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nel recupero della song: " . $e->getMessage(), 500);
+                }
+            } elseif ($id !== null && $action === 'format') {
+                // Verifica se esiste song_format per id_song e id_format
+                if (!isset($_GET['id_format'])) {
+                    sendErrorResponse("Parametro id_format richiesto", 400);
+                }
+                try {
+                    $idSong = (int)$id;
+                    $idFormat = (int)$_GET['id_format'];
+                    $query = "SELECT id_song FROM song_format WHERE id_song = :id_song AND id_format = :id_format LIMIT 1";
+                    $st = Songs::$db->prepare($query);
+                    $st->execute([
+                        ':id_song' => $idSong,
+                        ':id_format' => $idFormat
+                    ]);
+                    $format = $st->fetch(PDO::FETCH_ASSOC);
+                    
+                    sendSuccessResponse([
+                        'id_song' => $idSong,
+                        'id_format' => $idFormat,
+                        'exists' => !empty($format)
+                    ]);
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nel recupero del format: " . $e->getMessage(), 500);
+                }
+            } elseif ($id === null && $action === '') {
                 // Lista songs con filtri
                 $filter = [];
                 
@@ -94,6 +175,48 @@ function handleSongsRequest($method, $action, $id, $data) {
                     sendSuccessResponse($song[0], "Song creata con successo", 201);
                 } else {
                     sendErrorResponse("Errore nella creazione della song", 500);
+                }
+            } elseif ($id !== null && $action === 'format') {
+                // Aggiungi song_format
+                if (!isset($data['id_format'])) {
+                    sendErrorResponse("Parametro id_format richiesto", 400);
+                }
+                try {
+                    $idSong = (int)$id;
+                    $idFormat = (int)$data['id_format'];
+                    
+                    // Verifica se esiste già
+                    $checkQuery = "SELECT id_song FROM song_format WHERE id_song = :id_song AND id_format = :id_format LIMIT 1";
+                    $checkSt = Songs::$db->prepare($checkQuery);
+                    $checkSt->execute([
+                        ':id_song' => $idSong,
+                        ':id_format' => $idFormat
+                    ]);
+                    $existing = $checkSt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($existing) {
+                        sendSuccessResponse([
+                            'id_song' => $idSong,
+                            'id_format' => $idFormat,
+                            'already_exists' => true
+                        ], "Abbinamento già esistente");
+                    } else {
+                        // Inserisci
+                        $insertQuery = "INSERT INTO `song_format` (`id_song`, `id_format`) VALUES (:id_song, :id_format)";
+                        $insertSt = Songs::$db->prepare($insertQuery);
+                        $insertSt->execute([
+                            ':id_song' => $idSong,
+                            ':id_format' => $idFormat
+                        ]);
+                        
+                        sendSuccessResponse([
+                            'id_song' => $idSong,
+                            'id_format' => $idFormat,
+                            'already_exists' => false
+                        ], "Abbinamento creato con successo", 201);
+                    }
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nell'inserimento del format: " . $e->getMessage(), 500);
                 }
             } elseif ($id !== null && $action === 'upload') {
                 // Carica file audio
