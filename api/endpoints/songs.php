@@ -138,7 +138,9 @@ function handleSongsRequest($method, $action, $id, $data) {
                 if (isset($_GET['anno'])) $filter['anno'] = (int)$_GET['anno'];
                 if (isset($_GET['periodo'])) $filter['periodo'] = (int)$_GET['periodo'];
                 if (isset($_GET['genere'])) $filter['genere'] = (int)$_GET['genere'];
-                if (isset($_GET['diritti'])) $filter['diritti'] = (int)$_GET['diritti'];
+                if (isset($_GET['diritti']) && $_GET['diritti'] !== '*' && $_GET['diritti'] !== '') {
+                    $filter['diritti'] = (int)$_GET['diritti'];
+                }
                 
                 $songs = Songs::selectAll($filter);
                 $result = [];

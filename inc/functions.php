@@ -199,8 +199,10 @@ class Utils
     	$sel .= '
     	<label class="songFilter_select">Diritti</label>
     	<select id="f_diritti" name="f_diritti" class="form-control songFilter_select">
-	    	<option value="0" selected="">Siae</option>
-	    	<option value="1">Creative</option>
+	    	<option value="*" selected="">Tutti</option>
+	    	<option value="0">Siae</option>
+	    	<option value="1">Creative C</option>
+	    	<option value="3">WaterMelon</option>
 	    </select>
     	';
     	

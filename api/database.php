@@ -322,9 +322,8 @@ class Songs extends DB
         if(isset($filter['diritti']) && $filter['diritti'] > 0){
             $where[] = "sg_diritti = :diritti";
             $params[':diritti'] = $filter['diritti'];
-        } else {
-            $where[] = "sg_diritti = 0";
         }
+        // Se diritti non è impostato o è "*", non filtrare (mostra tutti)
 
         // Usa DISTINCT per evitare duplicati quando una song ha più format associati
         $query = "SELECT DISTINCT s.`sg_id`, s.`sg_artista`, s.`sg_titolo`, s.`sg_anno`, s.`sg_attivo` 

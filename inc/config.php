@@ -31,7 +31,8 @@ class Select {
 			case 'sg_diritti':
 				return array(
 		          "0" => "SIAE",
-		          "1" => "CREATIVE C"
+		          "1" => "CREATIVE C",
+		          "3" => "WATERMELON"
 	        	); 
 	        	break;
 			case 'sg_umoreId':
