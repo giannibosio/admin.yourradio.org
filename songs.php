@@ -427,6 +427,8 @@ $(document).ready(function() {
   $("#songFilter_reset").on("click", function(){
     // Reset tutti i select normali
     $(".songFilter_select").not("#f_format").prop("selectedIndex",0);
+    // Forza esplicitamente la select diritti a "*" (Tutti)
+    $("#f_diritti").val("*");
     // Reset la multiselect format
     $("#f_format option").prop("selected", false);
     updateFormatDisplay();
@@ -456,7 +458,11 @@ $(document).ready(function() {
     var formatParam = formatValues.length > 0 ? formatValues.join(\',\') : \'\';
     var formatQuery = formatParam !== \'\' ? \'format=\'+encodeURIComponent(formatParam)+\'&\' : \'\';
 
-    var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+"&anno="+$("#f_anno").val()+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+"&diritti="+$("#f_diritti").val();
+    // Gestisci diritti: se è "*" (Tutti), non inviare il parametro
+    var dirittiVal = $("#f_diritti").val();
+    var dirittiQuery = (dirittiVal && dirittiVal !== \'*\' && dirittiVal !== \'\') ? "&diritti="+encodeURIComponent(dirittiVal) : "";
+    
+    var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+"&anno="+$("#f_anno").val()+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+dirittiQuery;
 
     table.ajax.url( reloadTable ).load();
   }

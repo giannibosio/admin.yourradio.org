@@ -138,9 +138,20 @@ function handleSongsRequest($method, $action, $id, $data) {
                 if (isset($_GET['anno'])) $filter['anno'] = (int)$_GET['anno'];
                 if (isset($_GET['periodo'])) $filter['periodo'] = (int)$_GET['periodo'];
                 if (isset($_GET['genere'])) $filter['genere'] = (int)$_GET['genere'];
-                if (isset($_GET['diritti']) && $_GET['diritti'] !== '*' && $_GET['diritti'] !== '') {
-                    $filter['diritti'] = (int)$_GET['diritti'];
+                // Gestisci diritti: aggiungi al filtro solo se è un valore numerico valido (non "*" o vuoto)
+                // Nota: il valore 0 (Siae) è valido e deve essere incluso nel filtro
+                if (isset($_GET['diritti']) && $_GET['diritti'] !== '*' && $_GET['diritti'] !== '' && $_GET['diritti'] !== null) {
+                    $dirittiVal = trim($_GET['diritti']);
+                    if ($dirittiVal !== '*' && $dirittiVal !== '') {
+                        // Converti a intero (0, 1, 3 sono valori validi)
+                        $dirittiInt = (int)$dirittiVal;
+                        // Verifica che sia un numero valido (0, 1, o 3)
+                        if ($dirittiInt === 0 || $dirittiInt === 1 || $dirittiInt === 3) {
+                            $filter['diritti'] = $dirittiInt;
+                        }
+                    }
                 }
+                // Se diritti non è impostato o è "*", non aggiungere al filtro (mostra tutti)
                 
                 $songs = Songs::selectAll($filter);
                 $result = [];
