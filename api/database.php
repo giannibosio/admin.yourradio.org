@@ -10,12 +10,22 @@ class DB
     public static function init()
     {
         try {
-            $db_config = DB_ENGINE . ":host=".DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+            // Le API sono installate su yourradio.org, quindi il database è locale
+            // DB_HOST dovrebbe essere "localhost" quando le API sono sul server
+            $dbHost = DB_HOST;
+            $db_config = DB_ENGINE . ":host=".$dbHost . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+            
+            error_log("DB INIT: Tentativo connessione a " . $dbHost . " | Database: " . DB_NAME);
+            
             $pdo = new PDO($db_config, DB_USER, DB_PASS);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
             self::$db = $pdo;
+            
+            error_log("DB INIT: Connessione riuscita a " . $dbHost);
         } catch (PDOException $e) {
+            error_log("DB INIT ERROR: " . $e->getMessage() . " | Host: " . DB_HOST . " | DB: " . DB_NAME);
+            error_log("DB INIT ERROR CODE: " . $e->getCode());
             throw new Exception("Database connection failed: " . $e->getMessage());
         }
     }

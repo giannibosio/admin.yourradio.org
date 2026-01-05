@@ -3,6 +3,8 @@
  * Endpoint per gestione Players
  * GET    /api/players              - Lista tutti i players
  * GET    /api/players/{id}         - Dettaglio player
+ * PUT    /api/players/{id}         - Aggiorna player
+ * POST   /api/players/{id}         - Aggiorna player
  */
 
 function handlePlayersRequest($method, $action, $id, $data) {
@@ -32,8 +34,127 @@ function handlePlayersRequest($method, $action, $id, $data) {
                     sendErrorResponse("Player non trovato", 404);
                 }
                 sendSuccessResponse($player[0]);
+            } elseif ($id !== null && $action === 'subgruppi') {
+                // Lista subgruppi del player con stato checked
+                $player = Player::selectPlayerByID($id);
+                if (empty($player)) {
+                    sendErrorResponse("Player non trovato", 404);
+                }
+                $subgruppi = Gruppi::selectSubGruppoByIdPlayer($id);
+                $result = [];
+                foreach ($subgruppi as $sg) {
+                    $getCheck = Gruppi::getCheckRelatedSubGruppoByIdPlayer($id, $sg['sgr_id']);
+                    $checked = (!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked'] == 1) ? 1 : 0;
+                    $result[] = [
+                        'sgr_id' => (int)$sg['sgr_id'],
+                        'sgr_nome' => $sg['sgr_nome'],
+                        'checked' => $checked
+                    ];
+                }
+                sendSuccessResponse($result);
             } else {
                 sendErrorResponse("Action non valida", 400);
+            }
+            break;
+            
+        case 'PUT':
+        case 'POST':
+            if ($id !== null && $action === '') {
+                try {
+                    $playerId = intval($id);
+                    $updateFields = [];
+                    $params = [':pl_id' => $playerId];
+
+                    // Mappa i campi del form ai campi del database
+                    $fieldMapping = [
+                        'pl_active' => 'pl_active',
+                        'pl_nome' => 'pl_nome',
+                        'rete_id' => 'pl_idGruppo',
+                        'pl_riferimento' => 'pl_riferimento',
+                        'pl_mail' => 'pl_mail',
+                        'tel' => 'pl_telefono',
+                        'pl_indirizzo' => 'pl_indirizzo',
+                        'pl_citta' => 'pl_citta',
+                        'pl_pro' => 'pl_pro',
+                        'pl_cap' => 'pl_cap',
+                        'pl_note' => 'pl_note',
+                        'pl_time' => 'pl_time',
+                        'pl_player_freeaccess' => 'pl_player_freeaccess',
+                        'pl_monitor' => 'pl_monitor',
+                        'pl_test' => 'pl_test',
+                        'pl_sendmail' => 'pl_sendmail',
+                        'pl_client_edit_selector' => 'pl_client_edit_selector',
+                        'pl_client_edit_spot' => 'pl_client_edit_selector',
+                        'pl_client_edit_rubriche' => 'pl_client_edit_rubriche',
+                        'pl_client_ora_on_ora' => 'pl_client_ora_on_ora',
+                        'pl_client_ora_on_min' => 'pl_client_ora_on_min',
+                        'pl_oraOnCalcolata' => 'pl_oraOnCalcolata',
+                        'pl_client_ora_off_ora' => 'pl_client_ora_off_ora',
+                        'pl_client_ora_off_min' => 'pl_client_ora_off_min',
+                        'pl_oraOffCalcolata' => 'pl_oraOffCalcolata',
+                        'pl_ds_attivo' => 'pl_ds_attivo',
+                        'pl_ds_audio' => 'pl_ds_audio',
+                        'pl_ds_videospot' => 'pl_ds_videospot',
+                        'pl_ds_videoclip_on' => 'pl_ds_videoclip_on',
+                        'pl_ds_oroscopo_on' => 'pl_ds_oroscopo_on',
+                        'pl_ds_news_on' => 'pl_ds_news_on',
+                        'pl_ds_meteo_on' => 'pl_ds_meteo_on',
+                        'pl_ds_adv_on' => 'pl_ds_adv_on',
+                        'pl_ds_campagna_id' => 'pl_ds_campagna_id'
+                    ];
+
+                    foreach($fieldMapping as $formField => $dbField) {
+                        if(isset($data[$formField])) {
+                            $updateFields[] = "`".$dbField."` = :".$dbField;
+                            $params[':'.$dbField] = $data[$formField];
+                        }
+                    }
+
+                    // Gestisci i checkbox che potrebbero non essere inviati se non selezionati
+                    $checkboxFields = [
+                        'pl_active' => 'pl_active',
+                        'pl_time' => 'pl_time',
+                        'pl_player_freeaccess' => 'pl_player_freeaccess',
+                        'pl_monitor' => 'pl_monitor',
+                        'pl_test' => 'pl_test',
+                        'pl_sendmail' => 'pl_sendmail',
+                        'pl_client_edit_selector' => 'pl_client_edit_selector',
+                        'pl_client_edit_spot' => 'pl_client_edit_selector',
+                        'pl_client_edit_rubriche' => 'pl_client_edit_rubriche',
+                        'pl_ds_attivo' => 'pl_ds_attivo',
+                        'pl_ds_audio' => 'pl_ds_audio',
+                        'pl_ds_videospot' => 'pl_ds_videospot',
+                        'pl_ds_videoclip_on' => 'pl_ds_videoclip_on',
+                        'pl_ds_oroscopo_on' => 'pl_ds_oroscopo_on',
+                        'pl_ds_news_on' => 'pl_ds_news_on',
+                        'pl_ds_meteo_on' => 'pl_ds_meteo_on',
+                        'pl_ds_adv_on' => 'pl_ds_adv_on'
+                    ];
+                    foreach($checkboxFields as $formField => $dbField) {
+                        if(!isset($data[$formField])) {
+                            $updateFields[] = "`".$dbField."` = 0";
+                        }
+                    }
+
+                    if(empty($updateFields)) {
+                        sendErrorResponse("Nessun campo da aggiornare", 400);
+                    }
+
+                    $query = "UPDATE `players` SET " . implode(", ", $updateFields) . " WHERE `pl_id` = :pl_id";
+                    $st = DB::$db->prepare($query);
+                    $st->execute($params);
+
+                    $player = Player::selectPlayerByID($playerId);
+                    if (empty($player)) {
+                        sendErrorResponse("Player non trovato dopo l'aggiornamento", 404);
+                    }
+                    sendSuccessResponse($player[0], "Player aggiornato con successo");
+                } catch (Exception $e) {
+                    error_log("Errore nell'aggiornamento player: " . $e->getMessage());
+                    sendErrorResponse("Errore nell'aggiornamento del player: " . $e->getMessage(), 500);
+                }
+            } else {
+                sendErrorResponse("ID player richiesto", 400);
             }
             break;
             

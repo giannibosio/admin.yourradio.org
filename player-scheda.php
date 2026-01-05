@@ -5,7 +5,6 @@ include_once('load.php');
 if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
-DB::init();
 
 include_once('inc/head.php');
 
@@ -16,13 +15,44 @@ if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
   $title='Nuovo Player';
   $p = [];
 }else{
-  $p=Player::selectPlayerByID($id);
-  if(!empty($p) && isset($p[0])) {
+  // Carica player tramite API - SEMPRE usa https://yourradio.org/api
+  error_log("PLAYER-SCHEDA: Caricamento player ID " . intval($id) . " tramite API");
+  $apiResponse = callApi("players/" . intval($id));
+  
+  if(!$apiResponse) {
+    error_log("PLAYER-SCHEDA ERROR: Nessuna risposta dall'API");
+    $disabled=" disabled ";
+    $title='Errore: API non disponibile';
+    $p = [];
+  } elseif(isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+    error_log("PLAYER-SCHEDA: Player caricato con successo");
+    $playerData = $apiResponse['data'];
+    // Mappa TUTTI i campi dall'API - l'API restituisce SELECT * quindi tutti i campi sono disponibili
+    // Usa direttamente i dati dell'API invece di mapparli manualmente per evitare perdite
+    $p = [$playerData];
+    
+    // Assicurati che i campi critici abbiano valori di default se mancanti
+    if(!isset($p[0]['pl_id'])) $p[0]['pl_id'] = $id;
+    if(!isset($p[0]['pl_nome'])) $p[0]['pl_nome'] = '';
+    if(!isset($p[0]['pl_active'])) $p[0]['pl_active'] = 0;
+    if(!isset($p[0]['pl_idGruppo'])) $p[0]['pl_idGruppo'] = 0;
+    if(!isset($p[0]['gr_nome'])) $p[0]['gr_nome'] = '';
+    if(!isset($p[0]['pl_mem_percent'])) $p[0]['pl_mem_percent'] = 0;
+    if(!isset($p[0]['pl_mem_size'])) $p[0]['pl_mem_size'] = '';
+    if(!isset($p[0]['pl_mem_used'])) $p[0]['pl_mem_used'] = '';
+    if(!isset($p[0]['pl_mem_available'])) $p[0]['pl_mem_available'] = '';
+    if(!isset($p[0]['pl_player_ultimaDataEstesa'])) $p[0]['pl_player_ultimaDataEstesa'] = '';
+    if(!isset($p[0]['pl_keyword_md5'])) $p[0]['pl_keyword_md5'] = '';
+    if(!isset($p[0]['pl_dataCreazione'])) $p[0]['pl_dataCreazione'] = '';
     $disabled="";
     $title=$p[0]['pl_nome'] ?? '';
   } else {
+    error_log("PLAYER-SCHEDA ERROR: " . (isset($apiResponse['error']) ? json_encode($apiResponse['error']) : 'Risposta non valida'));
     $disabled=" disabled ";
     $title='Player non trovato';
+    if(isset($apiResponse['error']['message'])) {
+      error_log("PLAYER-SCHEDA ERROR MESSAGE: " . $apiResponse['error']['message']);
+    }
     $p = [];
   }
 }
@@ -57,42 +87,174 @@ if(!empty($p) && isset($p[0])) {
 
 $script='
 <script>
-$( "#update" ).click(function() {
-    $("#formAction").val("update");
+$( "#update" ).click(function(e) {
+    e.preventDefault();
+    $("#formActionPlayer").val("update");
+    console.log("Click su update, formAction impostato a update");
+    $( "#scheda-profilo" ).submit();
   });
   $( "#delete" ).click(function() {
-    $("#formAction").val("delete");
+    $("#formActionPlayer").val("delete");
     console.log("cancella scheda ");
     $( "#scheda-profilo" ).submit();
   });
   $( ".back-lista" ).click(function() {
-    $("#formAction").val("back");
+    $("#formActionPlayer").val("back");
     console.log("torna alla scheda del gruppo");
-    window.open("gruppo-scheda.php?id='.$p[0]['pl_idGruppo'].'","_self");
+    var gruppoId = '.((!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0).';
+    if(gruppoId > 0) {
+      window.open("gruppo-scheda.php?id=" + gruppoId, "_self");
+    } else {
+      window.open("gruppi.php", "_self");
+    }
   });
   $( "#changePassword" ).click(function() {
-    $("#formAction").val("changepassword");
+    $("#formActionPlayer").val("changepassword");
     var newPass=$("#newPassword").val();
     if(newPass==""){
       console.log("nessuna password inserita");
       return;
     }
+    
+    // Determina se usare il proxy (da localhost)
+    var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    var apiUrl = "https://yourradio.org/api/utenti/'.$_GET["id"].'/password";
+    var finalUrl = isLocalhost ? "api-proxy.php?url=" + encodeURIComponent(apiUrl) : apiUrl;
+    
+    console.log("API CALL - Change Password");
+    console.log("  Server: https://yourradio.org");
+    console.log("  Endpoint: /api/utenti/'.$_GET["id"].'/password");
+    console.log("  Method: PUT");
+    console.log("  Using proxy: " + isLocalhost);
+    console.log("  Final URL: " + finalUrl);
+    
     $.ajax({
           method: "PUT",
-          url: "https://yourradio.org/api/utenti/'.$_GET["id"].'/password",
+          url: finalUrl,
           contentType: "application/json",
           data: JSON.stringify({newpass: newPass}),
           success: function(res){
+            console.log("API RESPONSE - Change Password SUCCESS:", res);
             if(res.success) {
               $("#password").val(res.data.password_md5);
               console.log("nuova password cambiata");
               $(".alert").hide();
             }
           },
-          error: function(stato){
+          error: function(xhr, status, error){
+            console.error("API RESPONSE - Change Password ERROR:", {xhr: xhr, status: status, error: error});
             alert("Purtroppo non ho potuto cambiare la password... qualcosa è andato storto");
           }
         });
+  });
+
+  // Gestione submit form tramite API
+  $( "#scheda-profilo" ).on("submit", function(e) {
+    var formAction = $("#formActionPlayer").val();
+    console.log("Form submit - formAction:", formAction);
+    
+    if(formAction !== "update") {
+      console.log("FormAction non è update, procedo con submit normale");
+      return true; // Lascia gestire altri formAction normalmente
+    }
+    
+    e.preventDefault();
+    console.log("Intercettato submit form per update");
+    
+    var formData = {};
+    var $form = $(this);
+    
+    // Raccogli tutti i dati del form
+    $form.find("input, select, textarea").each(function() {
+      var $field = $(this);
+      var name = $field.attr("name");
+      var type = $field.attr("type");
+      
+      if(name && name !== "formAction" && name !== "formActionPlayer" && name !== "password") {
+        if(type === "checkbox") {
+          formData[name] = $field.is(":checked") ? 1 : 0;
+        } else if(type === "radio") {
+          if($field.is(":checked")) {
+            formData[name] = $field.val();
+          }
+        } else {
+          var val = $field.val();
+          if(val !== null && val !== undefined) {
+            formData[name] = val;
+          }
+        }
+      }
+    });
+    
+    console.log("Dati form raccolti:", formData);
+    
+    var playerId = formData.pl_id;
+    if(!playerId) {
+      playerId = "'.($_GET["id"] ?? '').'";
+    }
+    if(!playerId || playerId === "" || playerId === "nuova") {
+      alert("ID player non trovato");
+      console.error("ID player non trovato:", playerId);
+      return false;
+    }
+    
+    console.log("Invio dati a API per player ID:", playerId);
+    
+    // Determina se usare il proxy (da localhost)
+    var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    var apiUrl = "https://yourradio.org/api/players/" + playerId;
+    var finalUrl = isLocalhost ? "api-proxy.php?url=" + encodeURIComponent(apiUrl) : apiUrl;
+    
+    console.log("API CALL - Update Player");
+    console.log("  Server: https://yourradio.org");
+    console.log("  Endpoint: /api/players/" + playerId);
+    console.log("  Method: PUT");
+    console.log("  Using proxy: " + isLocalhost);
+    console.log("  Final URL: " + finalUrl);
+    console.log("  Data:", formData);
+    
+    var $submitBtn = $("#update");
+    var originalText = $submitBtn.html();
+    $submitBtn.prop("disabled", true).html("Salvataggio...");
+    
+    $.ajax({
+      method: "PUT",
+      url: finalUrl,
+      contentType: "application/json",
+      data: JSON.stringify(formData),
+      success: function(res) {
+        console.log("API RESPONSE - Update Player SUCCESS:", res);
+        console.log("  Server: https://yourradio.org");
+        console.log("  Response:", res);
+        if(res.success) {
+          alert("Player aggiornato con successo!");
+          window.location.reload();
+        } else {
+          alert("Errore: " + (res.error ? res.error.message : "Errore sconosciuto"));
+          $submitBtn.prop("disabled", false).html(originalText);
+        }
+      },
+      error: function(xhr, status, error) {
+        console.error("API RESPONSE - Update Player ERROR:");
+        console.error("  Server: https://yourradio.org");
+        console.error("  Status:", xhr.status);
+        console.error("  StatusText:", xhr.statusText);
+        console.error("  Error:", error);
+        console.error("  Response:", xhr.responseText);
+        var errorMsg = "Errore durante il salvataggio";
+        if(xhr.responseJSON && xhr.responseJSON.error) {
+          errorMsg = xhr.responseJSON.error.message || errorMsg;
+        } else if(xhr.statusText) {
+          errorMsg = "Errore " + xhr.status + ": " + xhr.statusText;
+        }
+        if(xhr.status === 404) {
+          errorMsg = "Endpoint API non trovato. Verifica che l API sia installata su yourradio.org";
+        }
+        alert(errorMsg);
+        $submitBtn.prop("disabled", false).html(originalText);
+      }
+    });
+    return false;
   });
 
   if($("#password").val()=="" && $("#login").val()!="" ){
@@ -100,38 +262,32 @@ $( "#update" ).click(function() {
     $(".alert").show();
   }
 
-  var cpuGauge = Gauge(document.getElementById("SDmem"), {
-    //dialStartAngle:1,
-    max: 100,
-    // custom label renderer
-    label: function(value) {
-      return Math.round(value) + "%";
-    },
-    // Custom dial colors (Optional)
-    color: function(value) {
-      if(value < 20) {
-        return "#5ee432"; // green
-      }else if(value < 40) {
-        return "#fffa50"; // yellow
-      }else if(value < 60) {
-        return "#f7aa38"; // orange
-      }else {
-        return "#ef4655"; // red
-      }
-    }
-  });
-  cpuGauge.setValueAnimated('.$p[0]['pl_mem_percent'].', 2);
+  // Inizializza il grafico SDmem - deve essere eseguito dopo che gauge.min.js è caricato
+  // e dopo che l elemento SDmem è nel DOM
 
 
 </script>
 ';
 
 
-///seleziona sottogruppi
-$sg=Gruppi::selectSubGruppoByIdPlayer($p[0]['pl_id']);
+// Carica gruppi per la select - SEMPRE usa https://yourradio.org/api
+error_log("PLAYER-SCHEDA: Caricamento gruppi tramite API");
+$gruppiApi = callApi("gruppi");
+$gruppi = [];
+if($gruppiApi && isset($gruppiApi['success']) && $gruppiApi['success'] && isset($gruppiApi['data'])) {
+  error_log("PLAYER-SCHEDA: Gruppi caricati con successo (" . count($gruppiApi['data']) . " gruppi)");
+  $gruppi = $gruppiApi['data'];
+} else {
+  error_log("PLAYER-SCHEDA ERROR: Errore nel caricamento gruppi - " . (isset($gruppiApi['error']) ? json_encode($gruppiApi['error']) : 'Risposta non valida'));
+}
 
-///seleziona tutte le campagne by gruppoid
-$campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
+$rete_id = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0;
+
+///seleziona sottogruppi - TODO: implementare API endpoint se necessario
+$sg = [];
+
+///seleziona tutte le campagne by gruppoid - TODO: implementare API endpoint se necessario
+$campagne = [];
 
 
 
@@ -156,20 +312,19 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                 <div class="row mt-5 align-items-center">
                   <div class="col-md-12 text-center mb-5">
                      <img src="./assets/images/<?=$logo?>" class="navbar-brand-img brand-sm mx-auto mb-4" alt="...">
-                      <h2 class="mb-0 text-uppercase"><?=$p[0]['pl_nome']?></h2>
-                      <h4 class="mb-0 text-uppercase"><?=$p[0]['gr_nome']?></h4>
-                      <small class="text-muted text-uppercase">ID.</small> <?=$p[0]['pl_id']?>
+                      <h2 class="mb-0 text-uppercase"><?=$p[0]['pl_nome'] ?? ''?></h2>
+                      <h4 class="mb-0 text-uppercase"><?=$p[0]['gr_nome'] ?? ''?></h4>
+                      <small class="text-muted text-uppercase">ID.</small> <?=$p[0]['pl_id'] ?? ''?>
                        <?php if($external_url!=''){?>
                           <button type="button" class="btn btn-primary" onclick="window.open('<?=$external_url?>','_blank');">Player on-line</button>
                         <?php }?>
                   </div>
                 </div>
 
-<input type="hidden" class="form-control" id="pl_id" name="pl_id" value="<?=$p[0]['pl_id']?>" required>
-
                 <div class="card-body">
 
                   <form id="scheda-profilo" class="needs-validation" novalidate method="post">
+                    <input type="hidden" class="form-control" id="pl_id" name="pl_id" value="<?=(!empty($p) && isset($p[0]['pl_id'])) ? $p[0]['pl_id'] : ''?>" required>
                     <!-- username-nome -->
                     <div class="form-row">
                       <div class="col-md-12 mb-3">
@@ -180,7 +335,7 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                       </div>
                       <div class="col-md-6 mb-3">
                         <label class="form-scheda-label">Nome</label>
-                        <input type="text" class="form-control input-uppercase" id="pl_nome" name="pl_nome" value="<?=$p[0]['pl_nome']?>" required>
+                        <input type="text" class="form-control input-uppercase" id="pl_nome" name="pl_nome" value="<?=$p[0]['pl_nome'] ?? ''?>" required>
                       </div>
 
                       <div class="col-md-6 mb-3">
@@ -204,17 +359,17 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                     <div class="form-row">
                       <div class="col-md-5 mb-3">
                         <label class="form-scheda-label">Riferimento</label>
-                        <input type="email" class="form-control input-uppercase" id="pl_riferimento" name="pl_riferimento" aria-describedby="emailHelp1" value="<?=strtolower($p[0]['pl_riferimento'])?>" required>
+                        <input type="email" class="form-control input-uppercase" id="pl_riferimento" name="pl_riferimento" aria-describedby="emailHelp1" value="<?=strtolower($p[0]['pl_riferimento'] ?? '')?>" required>
                         <div class="invalid-feedback"> Inserisci il nome del riferimento </div>
                       </div>
                       <div class="col-md-4 mb-3">
                         <label class="form-scheda-label">Email</label>
-                        <input type="email" class="form-control" id="pl_mail" name="pl_mail" aria-describedby="emailHelp1" value="<?=strtolower($p[0]['pl_mail'])?>" required>
+                        <input type="email" class="form-control" id="pl_mail" name="pl_mail" aria-describedby="emailHelp1" value="<?=strtolower($p[0]['pl_mail'] ?? '')?>" required>
                         <div class="invalid-feedback"> Inserisci un indirizzo email valido </div>
                       </div>
                       <div class="col-md-3 mb-3">
                         <label class="form-scheda-label">Telefono</label>
-                        <input class="form-control input-phoneus" id="custom-phone" maxlength="14" name="tel"value="<?=$p[0]['pl_telefono']?>" required>
+                        <input class="form-control input-phoneus" id="custom-phone" maxlength="14" name="tel"value="<?=$p[0]['pl_telefono'] ?? ''?>" required>
                         <div class="invalid-feedback"> Inserisci un numero di telefono </div>
                       </div>
                     </div> 
@@ -223,23 +378,23 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                     <div class="form-row">
                       <div class="col-md-5 mb-3">
                         <label class="form-scheda-label">Indirizzo</label>
-                        <input type="text" id="pl_indirizzo" class="form-control input-uppercase" placeholder="Enter your address" name="pl_indirizzo" value="<?=$p[0]['pl_indirizzo']?>" >
+                        <input type="text" id="pl_indirizzo" class="form-control input-uppercase" placeholder="Enter your address" name="pl_indirizzo" value="<?=$p[0]['pl_indirizzo'] ?? ''?>" >
                         <div class="invalid-feedback"> Bad address </div>
                       </div>
 
                       <div class="col-md-4 mb-3">
                         <label class="form-scheda-label">Città</label>
-                        <input type="text" class="form-control input-uppercase" id="pl_citta" name="pl_citta" value="<?=$p[0]['pl_citta']?>" required>
+                        <input type="text" class="form-control input-uppercase" id="pl_citta" name="pl_citta" value="<?=$p[0]['pl_citta'] ?? ''?>" required>
                         <div class="invalid-feedback"> Inserisci la città o la località </div>
                       </div>
                       <div class="col-md-1 mb-1">
                         <label class="form-scheda-label">PROV</label>
-                        <input class="form-control input-uppercase" id="pl_pro" maxlength="2" name="pl_pro" value="<?=$p[0]['pl_pro']?>" >
+                        <input class="form-control input-uppercase" id="pl_pro" maxlength="2" name="pl_pro" value="<?=$p[0]['pl_pro'] ?? ''?>" >
                         <div class="invalid-feedback"> Inserisci la provincia </div>
                       </div>
                       <div class="col-md-2 mb-2">
                         <label class="form-scheda-label">CAP</label>
-                        <input class="form-control" id="pl_cap" autocomplete="off" maxlength="5" name="pl_cap" value="<?=$p[0]['pl_cap']?>" >
+                        <input class="form-control" id="pl_cap" autocomplete="off" maxlength="5" name="pl_cap" value="<?=$p[0]['pl_cap'] ?? ''?>" >
                         <div class="invalid-feedback"> Inserisci un CAP. </div>
                       </div>
                     </div>
@@ -248,7 +403,7 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                     <div class="form-row">
                       <div class="col-md-12 mb-3">
                         <label class="form-scheda-label">Note</label>
-                        <textarea class="form-control" id="pl_note" name="pl_note" placeholder="Scrivi nota" ="" rows="3"><?=$p[0]['pl_note']?></textarea>
+                        <textarea class="form-control" id="pl_note" name="pl_note" placeholder="Scrivi nota" ="" rows="3"><?=$p[0]['pl_note'] ?? ''?></textarea>
                         <div class="invalid-feedback"> Please enter a message in the textarea. </div>
                       </div>
                     </div>
@@ -264,9 +419,9 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                         <div id="collapse1" class="collapse show" aria-labelledby="heading1" data-parent="#accordion1" style="">
                           <div class="card-body">
                             <i><h10>
-                            ultimo ping: <?=$p[0]['pl_player_ultimaDataEstesa']?><br>
-                            PC/IP player: <?=$p[0]['pl_player_pc']?><br>
-                            IP esterno: <?=$p[0]['pl_player_ip']?>
+                            ultimo ping: <?=$p[0]['pl_player_ultimaDataEstesa'] ?? ''?><br>
+                            PC/IP player: <?=$p[0]['pl_player_pc'] ?? ''?><br>
+                            IP esterno: <?=$p[0]['pl_player_ip'] ?? ''?>
                             </h10></i>
                             <?php if($type=="RASPI"){?>
                               <br><br>
@@ -279,10 +434,10 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                                 <div class="col-md-5">
                                   <div id="SDmemText" >
                                     <i><h10>
-                                    size: <?=$p[0]['pl_mem_size']?><br>
-                                    used: <?=$p[0]['pl_mem_used']?><br>
-                                    spazio disponibile: <?=$p[0]['pl_mem_available']?><br>
-                                    percentuale occupata: <?=$p[0]['pl_mem_percent']?>%<br>
+                                    size: <?=$p[0]['pl_mem_size'] ?? ''?><br>
+                                    used: <?=$p[0]['pl_mem_used'] ?? ''?><br>
+                                    spazio disponibile: <?=$p[0]['pl_mem_available'] ?? ''?><br>
+                                    percentuale occupata: <?=$p[0]['pl_mem_percent'] ?? 0?>%<br>
                                     </h10></i>
                                   </div>
                                 </div>
@@ -300,14 +455,14 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                         </div>
                         <div id="collapse2" class="collapse" aria-labelledby="heading2" data-parent="#accordion1" style="">
                           <div class="card-body">
-                            <?php echo buildCheckByDbField("Ora esatta","pl_time",$p[0]['pl_time']);?>
-                            <?php echo buildCheckByDbField("Multiutente","pl_player_freeaccess",$p[0]['pl_player_freeaccess']);?>
-                            <?php echo buildCheckByDbField("Monitor","pl_monitor",$p[0]['pl_monitor']);?>
-                            <?php echo buildCheckByDbField("Test","pl_test",$p[0]['pl_test']);?>
-                            <?php echo buildCheckByDbField("Send Mail","pl_sendmail",$p[0]['pl_sendmail']);?>
-                            <?php echo buildCheckByDbField("Edit selector","pl_client_edit_selector",$p[0]['pl_client_edit_selector']);?>
-                            <?php echo buildCheckByDbField("Edit Spot","pl_client_edit_selector",$p[0]['pl_client_edit_selector']);?>
-                            <?php echo buildCheckByDbField("Edit Rubriche","pl_client_edit_rubriche",$p[0]['pl_client_edit_rubriche']);?>
+                            <?php echo buildCheckByDbField("Ora esatta","pl_time",$p[0]['pl_time'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Multiutente","pl_player_freeaccess",$p[0]['pl_player_freeaccess'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Monitor","pl_monitor",$p[0]['pl_monitor'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Test","pl_test",$p[0]['pl_test'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Send Mail","pl_sendmail",$p[0]['pl_sendmail'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Edit selector","pl_client_edit_selector",$p[0]['pl_client_edit_selector'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Edit Spot","pl_client_edit_spot",$p[0]['pl_client_edit_selector'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Edit Rubriche","pl_client_edit_rubriche",$p[0]['pl_client_edit_rubriche'] ?? 0);?>
                             <hr><p class="mb-2"><strong>Orari funzionamento</strong></p>
                             <div class="row">
                               <div class="col-md-3 mb-3">
@@ -320,12 +475,12 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                               </div>
                             </div>
                             
-                            <input class="form-control" id="pl_client_ora_on_ora" name="pl_client_ora_on_ora" type="hidden" value="<?=$p[0]['pl_client_ora_on_ora']?>">
-                            <input class="form-control" id="pl_client_ora_on_min" name="pl_client_ora_on_min" type="hidden" value="<?=$p[0]['pl_client_ora_on_min']?>">
-                            <input class="form-control" id="pl_oraOnCalcolata" name="pl_oraOnCalcolata" type="hidden" value="<?=$p[0]['pl_oraOnCalcolata']?>">
-                            <input class="form-control" id="pl_client_ora_off_ora" name="pl_client_ora_off_ora" type="hidden" value="<?=$p[0]['pl_client_ora_off_ora']?>">
-                            <input class="form-control" id="pl_client_ora_off_min" name="pl_client_ora_off_min" type="hidden" value="<?=$p[0]['pl_client_ora_off_min']?>">
-                            <input class="form-control" id="pl_oraOffCalcolata" name="pl_oraOffCalcolata" type="hidden" value="<?=$p[0]['pl_oraOffCalcolata']?>">
+                            <input class="form-control" id="pl_client_ora_on_ora" name="pl_client_ora_on_ora" type="hidden" value="<?=$p[0]['pl_client_ora_on_ora'] ?? ''?>">
+                            <input class="form-control" id="pl_client_ora_on_min" name="pl_client_ora_on_min" type="hidden" value="<?=$p[0]['pl_client_ora_on_min'] ?? ''?>">
+                            <input class="form-control" id="pl_oraOnCalcolata" name="pl_oraOnCalcolata" type="hidden" value="<?=$p[0]['pl_oraOnCalcolata'] ?? ''?>">
+                            <input class="form-control" id="pl_client_ora_off_ora" name="pl_client_ora_off_ora" type="hidden" value="<?=$p[0]['pl_client_ora_off_ora'] ?? ''?>">
+                            <input class="form-control" id="pl_client_ora_off_min" name="pl_client_ora_off_min" type="hidden" value="<?=$p[0]['pl_client_ora_off_min'] ?? ''?>">
+                            <input class="form-control" id="pl_oraOffCalcolata" name="pl_oraOffCalcolata" type="hidden" value="<?=$p[0]['pl_oraOffCalcolata'] ?? ''?>">
                           </div>
                         </div>
                       </div>
@@ -338,7 +493,7 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                         </div>
                         <div id="collapse3" class="collapse" aria-labelledby="heading3" data-parent="#accordion1">
                           <div class="card-body">
-                            <?php echo buildCheckSubGroupByIdPlayer($p[0]['pl_id']);?>
+                            <?php echo buildCheckSubGroupByIdPlayer($p[0]['pl_id'] ?? 0);?>
                           </div>
                         </div>
                       </div>
@@ -353,18 +508,18 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                           
                           <div class="card-body">
                             <div class="col-md-4 mb-3">
-                            <?php echo buildCheckByDbField("Digital Signage Attivo","pl_ds_attivo",$p[0]['pl_ds_attivo']);?>
-                            <?php echo buildCheckByDbField("Audio","pl_ds_audio",$p[0]['pl_ds_audio']);?>
+                            <?php echo buildCheckByDbField("Digital Signage Attivo","pl_ds_attivo",$p[0]['pl_ds_attivo'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Audio","pl_ds_audio",$p[0]['pl_ds_audio'] ?? 0);?>
 
                         
 
 
-                            <?php echo buildCheckByDbField("Videospot","pl_ds_videospot",$p[0]['pl_ds_videospot']);?>
-                            <?php echo buildCheckByDbField("Videoclip","pl_ds_videoclip_on",$p[0]['pl_ds_videoclip_on']);?>
-                            <?php echo buildCheckByDbField("Infobox Oroscopo","pl_ds_oroscopo_on",$p[0]['pl_ds_oroscopo_on']);?>
-                            <?php echo buildCheckByDbField("Infobox News","pl_ds_news_on",$p[0]['pl_ds_news_on']);?>
-                            <?php echo buildCheckByDbField("Infobox Meteo","pl_ds_meteo_on",$p[0]['pl_ds_meteo_on']);?>
-                            <?php echo buildCheckByDbField("Infobox ADV","pl_ds_adv_on",$p[0]['pl_ds_adv_on']);?>
+                            <?php echo buildCheckByDbField("Videospot","pl_ds_videospot",$p[0]['pl_ds_videospot'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Videoclip","pl_ds_videoclip_on",$p[0]['pl_ds_videoclip_on'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Infobox Oroscopo","pl_ds_oroscopo_on",$p[0]['pl_ds_oroscopo_on'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Infobox News","pl_ds_news_on",$p[0]['pl_ds_news_on'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Infobox Meteo","pl_ds_meteo_on",$p[0]['pl_ds_meteo_on'] ?? 0);?>
+                            <?php echo buildCheckByDbField("Infobox ADV","pl_ds_adv_on",$p[0]['pl_ds_adv_on'] ?? 0);?>
                           </div>
                           <div class="col-md-4 mb-3">
 <label class="form-scheda-label">Campagna</label>
@@ -374,7 +529,7 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                           foreach ($campagne as $c) {
                             if($c['ds_camp_titolo']==''){continue;} ///cambiare con verifica scadenza
 
-                            if($c['ds_camp_id']==$p[0]['pl_ds_campagna_id']){$selected = "selected";}else{$selected = "";}
+                                if($c['ds_camp_id']==($p[0]['pl_ds_campagna_id'] ?? '')){$selected = "selected";}else{$selected = "";}
                             echo '<option value="'.$c['ds_camp_id'].'" '.$selected.'>'.strtoupper($c['ds_camp_titolo']).'</option>';
                           }?>
                         </select>
@@ -392,9 +547,9 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
                     <!-- CREATED/LOGIN -->
                     <div class="form-row">
                       <div class="col-md-12 mb-4 ">
-                        <input name="password" id="password" type="hidden" value="<?=$p[0]['pl_keyword_md5']?>" >
-                        <input name="formAction" id="formAction" type="hidden" value="<?=$_POST["formAction"]?>" >
-                        scheda creata il <?=$p[0]['pl_dataCreazione']?></h10></i>
+                        <input name="password" id="password" type="hidden" value="<?=$p[0]['pl_keyword_md5'] ?? ''?>" >
+                        <input name="formAction" id="formActionPlayer" type="hidden" value="<?=$_POST["formAction"] ?? ''?>" >
+                        scheda creata il <?=$p[0]['pl_dataCreazione'] ?? ''?></h10></i>
                       </div>
                     </div>
 
@@ -522,6 +677,44 @@ $campagne=Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
     });
   </script>  
 
+  <script>
+    // Inizializza il grafico SDmem dopo che tutto è caricato
+    $(window).on('load', function() {
+      setTimeout(function() {
+        var sdMemElement = document.getElementById("SDmem");
+        if(sdMemElement && typeof Gauge !== 'undefined') {
+          var memPercent = parseFloat('.((!empty($p) && isset($p[0]['pl_mem_percent'])) ? floatval($p[0]['pl_mem_percent']) : 0).') || 0;
+          console.log("Inizializzazione grafico SDmem - Elemento trovato, valore:", memPercent);
+          
+          try {
+            var cpuGauge = Gauge(sdMemElement, {
+              max: 100,
+              label: function(value) {
+                return Math.round(value) + "%";
+              },
+              color: function(value) {
+                if(value < 20) {
+                  return "#5ee432"; // green
+                }else if(value < 40) {
+                  return "#fffa50"; // yellow
+                }else if(value < 60) {
+                  return "#f7aa38"; // orange
+                }else {
+                  return "#ef4655"; // red
+                }
+              }
+            });
+            cpuGauge.setValueAnimated(memPercent, 2);
+            console.log("Grafico SDmem inizializzato con successo con valore:", memPercent);
+          } catch(e) {
+            console.error("Errore nell inizializzazione del grafico:", e);
+          }
+        } else {
+          console.error("SDmem non trovato o Gauge non disponibile. Elemento:", sdMemElement, "Gauge:", typeof Gauge);
+        }
+      }, 1000); // Attendi 1 secondo per essere sicuri che tutto sia caricato
+    });
+  </script>
 
   <script>
 

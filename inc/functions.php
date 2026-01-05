@@ -1,5 +1,87 @@
 <?php
 
+/**
+ * Funzione helper per chiamare le API su yourradio.org
+ * SEMPRE usa https://yourradio.org/api - MAI localhost per il database
+ */
+function callApi($endpoint, $method = 'GET', $data = null) {
+    // SEMPRE usa https://yourradio.org/api - MAI localhost
+    $apiUrl = "https://yourradio.org/api/" . ltrim($endpoint, '/');
+    
+    // Log dettagliato della chiamata
+    $logData = [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'endpoint' => $endpoint,
+        'full_url' => $apiUrl,
+        'method' => $method,
+        'server' => 'https://yourradio.org',
+        'has_data' => $data !== null
+    ];
+    error_log("API CALL: " . json_encode($logData, JSON_PRETTY_PRINT));
+    
+    $ch = curl_init($apiUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
+    if ($data !== null) {
+        $jsonData = is_array($data) ? json_encode($data) : $data;
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        error_log("API CALL DATA: " . substr($jsonData, 0, 500)); // Log primi 500 caratteri
+    }
+    
+    $startTime = microtime(true);
+    $response = curl_exec($ch);
+    $endTime = microtime(true);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    $curlInfo = curl_getinfo($ch);
+    curl_close($ch);
+    
+    $responseLog = [
+        'http_code' => $httpCode,
+        'response_time' => round(($endTime - $startTime) * 1000, 2) . 'ms',
+        'response_size' => strlen($response),
+        'curl_error' => $error ?: 'none',
+        'effective_url' => $curlInfo['url'] ?? $apiUrl
+    ];
+    error_log("API RESPONSE: " . json_encode($responseLog, JSON_PRETTY_PRINT));
+    
+    if ($error) {
+        error_log("API CALL ERROR: " . $error . " | URL: " . $apiUrl);
+        error_log("API CALL ERROR DETAILS: curl_errno potrebbe indicare problemi di connessione, DNS, SSL");
+        return ['success' => false, 'error' => ['message' => 'Errore di connessione: ' . $error], 'url' => $apiUrl, 'curl_error' => $error];
+    }
+    
+    // Se non c'è risposta o HTTP code non è 200
+    if (empty($response) || $httpCode !== 200) {
+        error_log("API CALL FAILED: HTTP " . $httpCode . " | URL: " . $apiUrl);
+        error_log("API CALL FAILED RESPONSE: " . substr($response, 0, 500));
+        error_log("API CALL FAILED CURL INFO: " . json_encode($curlInfo));
+        return ['success' => false, 'error' => ['message' => 'Errore HTTP ' . $httpCode . ($response ? ': ' . substr($response, 0, 100) : '')], 'httpCode' => $httpCode, 'url' => $apiUrl, 'response' => substr($response, 0, 200)];
+    }
+    
+    $result = json_decode($response, true);
+    if ($result === null) {
+        error_log("API CALL JSON DECODE ERROR: " . json_last_error_msg() . " | Response: " . substr($response, 0, 200));
+        return ['success' => false, 'error' => ['message' => 'Risposta JSON non valida: ' . json_last_error_msg()], 'httpCode' => $httpCode, 'url' => $apiUrl];
+    }
+    
+    if (isset($result['success'])) {
+        error_log("API CALL SUCCESS: " . ($result['success'] ? 'YES' : 'NO') . " | URL: " . $apiUrl);
+        if(!$result['success'] && isset($result['error'])) {
+            error_log("API CALL ERROR IN RESPONSE: " . json_encode($result['error']));
+        }
+    } else {
+        error_log("API CALL WARNING: Risposta senza campo 'success' | URL: " . $apiUrl);
+    }
+    
+    return $result ?: ['success' => false, 'error' => ['message' => 'Risposta non valida'], 'httpCode' => $httpCode, 'url' => $apiUrl];
+}
+
 class Utils 
 {
     
@@ -271,15 +353,41 @@ function createSelectForSchedaSong2($name,$nameField,$selected){
 
 function buildCheckSubGroupByIdPlayer($id){
     $check = '';
-    $res=Gruppi::selectSubGruppoByIdPlayer($id);
-    foreach($res as $sg){
-        $getCheck=Gruppi::getCheckRelatedSubGruppoByIdPlayer($id,$sg['sgr_id']);
-        if(!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked']==1){$checked=" checked ";}else{$checked="";}
-        $check.='
+    
+    // Usa l'API invece del database locale
+    $apiResponse = callApi("players/" . intval($id) . "/subgruppi");
+    
+    if($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+        $res = $apiResponse['data'];
+        foreach($res as $sg){
+            $checked = (isset($sg['checked']) && $sg['checked'] == 1) ? " checked " : "";
+            $check.='
     <div class="custom-control custom-checkbox">
         <input type="checkbox" class="custom-control-input" id="subgruppo_'.$sg['sgr_id'].'" name="subgruppo_'.$sg['sgr_id'].'" value="1" '.$checked.'>
-        <label class="custom-control-label" for="customCheck1">'.$sg['sgr_nome'].'-'.$sg['sgr_id'].'</label>
+        <label class="custom-control-label" for="subgruppo_'.$sg['sgr_id'].'">'.$sg['sgr_nome'].'-'.$sg['sgr_id'].'</label>
     </div>';
+        }
+    } else {
+        // Fallback: prova a usare il database locale se disponibile (solo per compatibilità)
+        if(class_exists('Gruppi') && method_exists('Gruppi', 'selectSubGruppoByIdPlayer')) {
+            try {
+                if(!isset(DB::$db) || DB::$db === null) {
+                    DB::init();
+                }
+                $res = Gruppi::selectSubGruppoByIdPlayer($id);
+                foreach($res as $sg){
+                    $getCheck = Gruppi::getCheckRelatedSubGruppoByIdPlayer($id, $sg['sgr_id']);
+                    if(!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked']==1){$checked=" checked ";}else{$checked="";}
+                    $check.='
+    <div class="custom-control custom-checkbox">
+        <input type="checkbox" class="custom-control-input" id="subgruppo_'.$sg['sgr_id'].'" name="subgruppo_'.$sg['sgr_id'].'" value="1" '.$checked.'>
+        <label class="custom-control-label" for="subgruppo_'.$sg['sgr_id'].'">'.$sg['sgr_nome'].'-'.$sg['sgr_id'].'</label>
+    </div>';
+                }
+            } catch(Exception $e) {
+                error_log("Errore in buildCheckSubGroupByIdPlayer: " . $e->getMessage());
+            }
+        }
     }
 
     return $check;
@@ -287,13 +395,20 @@ function buildCheckSubGroupByIdPlayer($id){
 }
 
 
-function buildCheckByDbField($label,$nameField,$valueField){
+function buildCheckByDbField($label,$nameField,$valueField,$customId = null){
 
     $checked=($valueField==1 ? "checked" : "");
+    // Genera un ID unico combinando nameField e label normalizzato
+    if($customId === null) {
+        $idSuffix = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $label));
+        $fieldId = $nameField . '_' . $idSuffix;
+    } else {
+        $fieldId = $customId;
+    }
     $check='
     <div class="custom-control custom-checkbox">
-        <input type="checkbox" class="custom-control-input" id="'.$nameField.'" name="'.$nameField.'" value="1" '.$checked.'>
-        <label class="custom-control-label" for="customCheck1">'.$label.'</label>
+        <input type="checkbox" class="custom-control-input" id="'.$fieldId.'" name="'.$nameField.'" value="1" '.$checked.'>
+        <label class="custom-control-label" for="'.$fieldId.'">'.$label.'</label>
     </div>
 
     ';

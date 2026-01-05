@@ -69,7 +69,13 @@ if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
           'pl_idGruppo' => $playerData['pl_idGruppo'] ?? 0,
           'gr_nome' => $playerData['gr_nome'] ?? '',
           'gr_nat_port' => $playerData['gr_nat_port'] ?? '',
-          'pl_mem_percent' => $playerData['pl_mem_percent'] ?? 0
+          'pl_mem_percent' => $playerData['pl_mem_percent'] ?? 0,
+          'pl_mem_size' => $playerData['pl_mem_size'] ?? '',
+          'pl_mem_used' => $playerData['pl_mem_used'] ?? '',
+          'pl_mem_available' => $playerData['pl_mem_available'] ?? '',
+          'pl_player_ultimaDataEstesa' => $playerData['pl_player_ultimaDataEstesa'] ?? '',
+          'pl_keyword_md5' => $playerData['pl_keyword_md5'] ?? '',
+          'pl_dataCreazione' => $playerData['pl_dataCreazione'] ?? ''
         ]];
       }
     }
@@ -387,10 +393,10 @@ if (!empty($p) && isset($p[0]['pl_idGruppo'])) {
                                 <div class="col-md-5">
                                   <div id="SDmemText" >
                                     <i><h10>
-                                    size: <?=$p[0]['pl_mem_size']?><br>
-                                    used: <?=$p[0]['pl_mem_used']?><br>
-                                    spazio disponibile: <?=$p[0]['pl_mem_available']?><br>
-                                    percentuale occupata: <?=$p[0]['pl_mem_percent']?>%<br>
+                                    size: <?=$p[0]['pl_mem_size'] ?? ''?><br>
+                                    used: <?=$p[0]['pl_mem_used'] ?? ''?><br>
+                                    spazio disponibile: <?=$p[0]['pl_mem_available'] ?? ''?><br>
+                                    percentuale occupata: <?=$p[0]['pl_mem_percent'] ?? 0?>%<br>
                                     </h10></i>
                                   </div>
                                 </div>

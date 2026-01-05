@@ -176,7 +176,8 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
         <select class="form-control" name="sg_anno" id="sg_anno" >
           <?php 
           echo '<option value="0"></option>';
-          for ($a=2021;$a>1945;$a=$a-1){
+          $currentYear = (int)date('Y');
+          for ($a=$currentYear;$a>=1900;$a=$a-1){
             if(isset($s[0]['sg_anno']) && $s[0]['sg_anno']==$a){$selected = "selected";}else{$selected = "";}
             echo '<option value="'.$a.'" '.$selected.'>'.$a.'</option>';
           }?>

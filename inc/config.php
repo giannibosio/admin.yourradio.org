@@ -2,17 +2,8 @@
 
 /// DATABASE
 define('DB_ENGINE', "mysql");
-// Rileva automaticamente l'host del database in base al server
-// Se siamo su admin.yourradio.org, il database potrebbe essere su localhost (stesso server)
-// oppure su yourradio.org (server remoto)
-if (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'admin.yourradio.org') !== false) {
-    // Siamo su admin.yourradio.org - prova prima localhost (stesso server)
-    // Se non funziona, potrebbe essere necessario configurare MySQL per accettare connessioni remote
-    define('DB_HOST', "localhost");
-} else {
-    // Sviluppo locale
-    define('DB_HOST', "localhost");
-}
+// Il database è sempre su yourradio.org
+define('DB_HOST', "yourradio.org");
 define('DB_NAME', "myradio");
 define('DB_USER', "mymusic");
 define('DB_PASS', "jago22422");

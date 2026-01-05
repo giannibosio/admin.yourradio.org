@@ -13,9 +13,14 @@ handleCors();
 
 // Inizializza database
 try {
+    error_log("API INDEX: Inizializzazione database...");
     DB::init();
+    error_log("API INDEX: Database inizializzato con successo");
 } catch (Exception $e) {
-    sendErrorResponse("Database connection failed", 500, 'DB_ERROR');
+    error_log("API INDEX ERROR: " . $e->getMessage());
+    error_log("API INDEX ERROR: DB_HOST=" . (defined('DB_HOST') ? DB_HOST : 'NOT DEFINED'));
+    error_log("API INDEX ERROR: DB_NAME=" . (defined('DB_NAME') ? DB_NAME : 'NOT DEFINED'));
+    sendErrorResponse("Database connection failed: " . $e->getMessage(), 500, 'DB_ERROR');
 }
 
 // Ottieni il path della richiesta
