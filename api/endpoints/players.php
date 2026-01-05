@@ -62,6 +62,7 @@ function handlePlayersRequest($method, $action, $id, $data) {
             if ($id !== null && $action === '') {
                 try {
                     $playerId = intval($id);
+                    error_log("UPDATE PLAYER: ID=" . $playerId . " | Data ricevuta: " . json_encode($data));
                     $updateFields = [];
                     $params = [':pl_id' => $playerId];
 
@@ -69,7 +70,7 @@ function handlePlayersRequest($method, $action, $id, $data) {
                     $fieldMapping = [
                         'pl_active' => 'pl_active',
                         'pl_nome' => 'pl_nome',
-                        'rete_id' => 'pl_idGruppo',
+                        'pl_idGruppo' => 'pl_idGruppo',
                         'pl_riferimento' => 'pl_riferimento',
                         'pl_mail' => 'pl_mail',
                         'tel' => 'pl_telefono',
@@ -104,10 +105,13 @@ function handlePlayersRequest($method, $action, $id, $data) {
                     ];
 
                     foreach($fieldMapping as $formField => $dbField) {
-                        // Gestisci esplicitamente rete_id - deve essere sempre incluso anche se 0
-                        if($formField === 'rete_id') {
+                        // Gestisci esplicitamente pl_idGruppo - deve essere sempre incluso anche se 0
+                        if($formField === 'pl_idGruppo') {
                             $updateFields[] = "`".$dbField."` = :".$dbField;
-                            $params[':'.$dbField] = isset($data[$formField]) ? intval($data[$formField]) : 0;
+                            // Usa array_key_exists invece di isset per gestire correttamente il valore 0
+                            $plIdGruppoValue = array_key_exists($formField, $data) ? intval($data[$formField]) : 0;
+                            $params[':'.$dbField] = $plIdGruppoValue;
+                            error_log("UPDATE PLAYER: pl_idGruppo trovato nei dati, valore: " . $plIdGruppoValue . " (da data: " . (isset($data[$formField]) ? $data[$formField] : 'non presente') . ")");
                         } elseif(isset($data[$formField])) {
                             $updateFields[] = "`".$dbField."` = :".$dbField;
                             $params[':'.$dbField] = $data[$formField];

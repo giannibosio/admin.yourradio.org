@@ -93,7 +93,8 @@ if(!empty($p) && isset($p[0])) {
 
 $playerIdFallback = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $playerIdForJs = (!empty($_GET['id']) && isset($_GET['id'])) ? intval($_GET['id']) : 0;
-$gruppoIdForJs = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0;
+$gruppoIdForJs = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? intval($p[0]['pl_idGruppo']) : 0;
+error_log("PLAYER-SCHEDA: gruppoIdForJs calcolato: " . $gruppoIdForJs . " (da pl_idGruppo: " . (isset($p[0]['pl_idGruppo']) ? $p[0]['pl_idGruppo'] : 'non presente') . ")");
 $userIdForPassword = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $script = '
 <script>
@@ -117,9 +118,11 @@ $(document).ready(function() {
     $("#formActionPlayer").val("back");
     console.log("torna alla scheda del gruppo");
     var gruppoId = __GRUPPO_ID_FOR_JS__;
+    console.log("gruppoId per back-lista:", gruppoId, "| tipo:", typeof gruppoId);
     if(gruppoId > 0) {
       window.location.href = "gruppo-scheda.php?id=" + gruppoId;
     } else {
+      console.log("gruppoId è 0 o non valido, vado a gruppi.php");
       window.location.href = "gruppi.php";
     }
   });
@@ -165,6 +168,14 @@ $(document).ready(function() {
         });
   });
 
+  // Log del valore iniziale di pl_idGruppo al caricamento della pagina
+  $(document).ready(function() {
+    var serverPlIdGruppo = ' . (isset($p[0]['pl_idGruppo']) ? intval($p[0]['pl_idGruppo']) : 0) . ';
+    var initialPlIdGruppo = $("#pl_idGruppo").val();
+    console.log("VALORE INIZIALE pl_idGruppo (hidden) al caricamento pagina:", initialPlIdGruppo, "| tipo:", typeof initialPlIdGruppo);
+    console.log("Valore pl_idGruppo dal server (PHP):", serverPlIdGruppo);
+  });
+
   // Gestione submit form tramite API
   $( "#scheda-profilo" ).on("submit", function(e) {
     var formAction = $("#formActionPlayer").val();
@@ -204,9 +215,11 @@ $(document).ready(function() {
           }
         } else {
           var val = $field.val();
-          // Gestisci esplicitamente il campo rete_id - deve essere sempre incluso anche se 0
-          if(name === "rete_id") {
-            formData[name] = parseInt(val) || 0;
+          // Gestisci esplicitamente il campo pl_idGruppo (hidden) - deve essere sempre incluso anche se 0
+          if(name === "pl_idGruppo") {
+            console.log("Campo pl_idGruppo (hidden) trovato nel form - valore:", val, "| tipo:", typeof val);
+            formData[name] = (val !== null && val !== undefined && val !== "") ? parseInt(val) : 0;
+            console.log("Campo pl_idGruppo dopo conversione:", formData[name], "| tipo:", typeof formData[name]);
           } else if(val !== null && val !== undefined) {
             formData[name] = val;
           }
@@ -214,12 +227,13 @@ $(document).ready(function() {
       }
     });
     
-    // Assicurati che rete_id sia sempre presente (anche se 0)
-    if(!("rete_id" in formData)) {
-      formData.rete_id = 0;
+    // Assicurati che pl_idGruppo sia sempre presente (anche se 0)
+    if(!("pl_idGruppo" in formData)) {
+      formData.pl_idGruppo = 0;
     }
     
     console.log("Dati form raccolti:", formData);
+    console.log("VALORE pl_idGruppo da inviare all\'API:", formData.pl_idGruppo !== undefined ? formData.pl_idGruppo : "NON PRESENTE", "| Tipo:", typeof formData.pl_idGruppo);
     
     var playerId = formData.pl_id;
     if(!playerId) {
@@ -320,7 +334,8 @@ if($gruppiApi && isset($gruppiApi['success']) && $gruppiApi['success'] && isset(
 }
 
 // Usa sempre pl_idGruppo dal database (recuperato dall'API)
-$rete_id = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0;
+$rete_id = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? intval($p[0]['pl_idGruppo']) : 0;
+error_log("PLAYER-SCHEDA: pl_idGruppo recuperato dal DB: " . (isset($p[0]['pl_idGruppo']) ? $p[0]['pl_idGruppo'] : 'non presente') . " | rete_id impostato a: " . $rete_id . " | tipo: " . gettype($rete_id));
 
 ///seleziona sottogruppi - TODO: implementare API endpoint se necessario
 $sg = [];
@@ -381,6 +396,7 @@ $campagne = [];
 
                   <form id="scheda-profilo" class="needs-validation" novalidate method="post">
                     <input type="hidden" class="form-control" id="pl_id" name="pl_id" value="<?=(!empty($p) && isset($p[0]['pl_id'])) ? $p[0]['pl_id'] : ''?>" required>
+                    <input type="hidden" id="pl_idGruppo" name="pl_idGruppo" value="<?=(!empty($p) && isset($p[0]['pl_idGruppo'])) ? intval($p[0]['pl_idGruppo']) : 0?>">
                     <!-- username-nome -->
                     <div class="form-row">
                       <div class="col-md-12 mb-3">
@@ -389,23 +405,9 @@ $campagne = [];
                           <label class="custom-control-label" for="pl_active"><?=$chbox_active_lab?></label>
                         </div>
                       </div>
-                      <div class="col-md-6 mb-3">
+                      <div class="col-md-12 mb-3">
                         <label class="form-scheda-label">Nome</label>
                         <input type="text" class="form-control input-uppercase" id="pl_nome" name="pl_nome" value="<?=$p[0]['pl_nome'] ?? ''?>" required>
-                      </div>
-
-                      <div class="col-md-6 mb-3">
-                        <label class="form-scheda-label">Gruppo</label>
-                        <select class="form-control" name="rete_id" id="rete_id" >
-                          <?php 
-                          if(0==$rete_id){$selected = "selected";}
-                          echo '<option value="0" '.$selected.'>TUTTE (admin)</option>';
-                          foreach ($gruppi as $g) {
-                            if($g['gr_nome']==''){continue;}
-                            if($g['gr_id']==$rete_id){$selected = "selected";}else{$selected = "";}
-                            echo '<option value="'.$g['gr_id'].'" '.$selected.'>'.strtoupper($g['gr_nome']).'</option>';
-                          }?>
-                        </select>
                       </div>
 
 
