@@ -6,8 +6,7 @@ if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
 
-
-DB::init();
+// NON inizializzare il database locale - usa solo le API
 
 if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
 
@@ -80,9 +79,9 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
           echo "Errore nell'aggiornamento: " . (isset($apiResponse['message']) ? $apiResponse['message'] : 'Errore sconosciuto');
         }
       } else {
-        // Fallback al metodo diretto se l'API non funziona
-        $_GET["id"] = Utenti::updateUtente($_POST);
-        $_POST["formAction"] = '';
+        // Errore API - mostra messaggio
+        error_log("Errore API update utente: HTTP " . $httpCode . " - " . ($curlError ?: $response));
+        echo "Errore nell'aggiornamento: " . ($curlError ?: "Errore HTTP " . $httpCode);
       }
     } else {
       echo "Login non valido !";
@@ -108,10 +107,9 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
       $_POST["formAction"] = '';
       header("location:profili.php");
     } else {
-      // Fallback al metodo diretto se l'API non funziona
-      $_POST["formAction"] = '';
-      $res = Utenti::deleteUtente($_GET["id"]);
-    header("location:profili.php");
+      // Errore API - mostra messaggio
+      error_log("Errore API delete utente: HTTP " . $httpCode . " - " . ($curlError ?: $response));
+      echo "Errore nell'eliminazione: " . ($curlError ?: "Errore HTTP " . $httpCode);
     }
   }
 
@@ -146,11 +144,11 @@ $secret_2fa = '';
 $require_2fa = 0;
 $gruppi_monitor = '';
 
-// Carica il nome dal database solo per impostare il title (se l'utente esiste)
+// Carica il nome dall'API solo per impostare il title (se l'utente esiste)
 if(!empty($id) && $id != 'nuova' && is_numeric($id)){
-  $utenteData = Utenti::selectUtenteByID($id);
-  if(!empty($utenteData) && isset($utenteData[0]['nome'])){
-    $nome = $utenteData[0]['nome'];
+  $apiResponse = callApi("utenti/" . intval($id));
+  if($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data']['nome'])){
+    $nome = $apiResponse['data']['nome'];
   }
 }
 
@@ -169,9 +167,24 @@ if(!isset($id) || $id==0 || $id==''){
 
 include_once('inc/head.php');
 
+// Carica gruppi dall'API
+$gruppi = [];
+$apiResponse = callApi("gruppi");
+if($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])){
+  foreach($apiResponse['data'] as $g){
+    $gruppi[] = [
+      'gr_id' => $g['id'],
+      'gr_nome' => $g['nome'],
+      'gr_active' => isset($g['attivo']) ? $g['attivo'] : 1
+    ];
+  }
+}
 
-$gruppi=Gruppi::selectAllActive();
-$contractors=Contractor::selectAll();
+// Contractors: non esiste endpoint API, usa array vuoto o valori di default
+$contractors = [
+  ['id' => 1, 'name' => 'Yourradio'],
+  ['id' => 2, 'name' => 'Altro']
+];
 
 
 

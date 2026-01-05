@@ -200,7 +200,12 @@ $players_table.='
 <!-- table '.$tableId.' -->
 <div class="card shadow mb-6" style="border: 1px solid #666">
 <div class="card-body">
-<h5 class="card-title">Players di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="card-title mb-0">Players di '.strtoupper($g[0]['gr_nome'] ?? '').'</h5>
+  <button type="button" class="btn btn-success btn-sm" id="btn-nuovo-player" title="Aggiungi nuovo player">
+    <span class="fe fe-plus fe-16"></span> Nuovo Player
+  </button>
+</div>
 <!-- table -->
 <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
 <thead>
@@ -281,6 +286,18 @@ $(document).ready(function() {
   $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(){
     var id=$(this).attr("id");
     window.location.href = "player-scheda.php?id="+id;
+  });
+
+  // Pulsante Nuovo Player
+  $("#btn-nuovo-player").on("click", function() {
+    var gruppoId = __GRUPPO_ID_FOR_NEW_PLAYER__;
+    // Apri player-scheda.php senza ID per creare un nuovo player
+    // Passa l\'ID del gruppo come parametro per precompilare pl_idGruppo
+    if(gruppoId > 0) {
+      window.location.href = "player-scheda.php?gruppo_id=" + gruppoId;
+    } else {
+      window.location.href = "player-scheda.php";
+    }
   });
 
 });
@@ -1323,7 +1340,12 @@ $script='
             <script src='https://cdn.datatables.net/buttons/1.6.5/js/buttons.colVis.min.js'></script>
 
   <script>
-    <?=$scripts?>
+    <?php
+    // Sostituisci i placeholder nei scripts
+    $gruppoIdForNewPlayer = isset($_GET["id"]) ? intval($_GET["id"]) : 0;
+    $scripts = str_replace('__GRUPPO_ID_FOR_NEW_PLAYER__', $gruppoIdForNewPlayer, $scripts);
+    echo $scripts;
+    ?>
   </script>            
 <?=$script?>
   <script>

@@ -15,11 +15,17 @@ if (!$isAjaxRequest) {
 }
 
 $id=$_GET["id"] ?? '';
+$gruppoIdFromUrl = isset($_GET["gruppo_id"]) ? intval($_GET["gruppo_id"]) : null;
+
 if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
   $disabled=" disabled ";
   $id='nuova';
   $title='Nuovo Player';
   $p = [];
+  // Se viene passato gruppo_id dall'URL, precompila pl_idGruppo per il nuovo player
+  if($gruppoIdFromUrl !== null && $gruppoIdFromUrl > 0) {
+    $p[0] = ['pl_idGruppo' => $gruppoIdFromUrl];
+  }
 }else{
   // Carica player tramite API - SEMPRE usa https://yourradio.org/api
   error_log("PLAYER-SCHEDA: Caricamento player ID " . intval($id) . " tramite API");
