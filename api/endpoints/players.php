@@ -92,16 +92,7 @@ function handlePlayersRequest($method, $action, $id, $data) {
                         'pl_oraOnCalcolata' => 'pl_oraOnCalcolata',
                         'pl_client_ora_off_ora' => 'pl_client_ora_off_ora',
                         'pl_client_ora_off_min' => 'pl_client_ora_off_min',
-                        'pl_oraOffCalcolata' => 'pl_oraOffCalcolata',
-                        'pl_ds_attivo' => 'pl_ds_attivo',
-                        'pl_ds_audio' => 'pl_ds_audio',
-                        'pl_ds_videospot' => 'pl_ds_videospot',
-                        'pl_ds_videoclip_on' => 'pl_ds_videoclip_on',
-                        'pl_ds_oroscopo_on' => 'pl_ds_oroscopo_on',
-                        'pl_ds_news_on' => 'pl_ds_news_on',
-                        'pl_ds_meteo_on' => 'pl_ds_meteo_on',
-                        'pl_ds_adv_on' => 'pl_ds_adv_on',
-                        'pl_ds_campagna_id' => 'pl_ds_campagna_id'
+                        'pl_oraOffCalcolata' => 'pl_oraOffCalcolata'
                     ];
 
                     foreach($fieldMapping as $formField => $dbField) {
@@ -128,15 +119,7 @@ function handlePlayersRequest($method, $action, $id, $data) {
                         'pl_sendmail' => 'pl_sendmail',
                         'pl_client_edit_selector' => 'pl_client_edit_selector',
                         'pl_client_edit_spot' => 'pl_client_edit_selector',
-                        'pl_client_edit_rubriche' => 'pl_client_edit_rubriche',
-                        'pl_ds_attivo' => 'pl_ds_attivo',
-                        'pl_ds_audio' => 'pl_ds_audio',
-                        'pl_ds_videospot' => 'pl_ds_videospot',
-                        'pl_ds_videoclip_on' => 'pl_ds_videoclip_on',
-                        'pl_ds_oroscopo_on' => 'pl_ds_oroscopo_on',
-                        'pl_ds_news_on' => 'pl_ds_news_on',
-                        'pl_ds_meteo_on' => 'pl_ds_meteo_on',
-                        'pl_ds_adv_on' => 'pl_ds_adv_on'
+                        'pl_client_edit_rubriche' => 'pl_client_edit_rubriche'
                     ];
                     foreach($checkboxFields as $formField => $dbField) {
                         if(!isset($data[$formField])) {

@@ -98,6 +98,37 @@ error_log("PLAYER-SCHEDA: gruppoIdForJs calcolato: " . $gruppoIdForJs . " (da pl
 $userIdForPassword = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $script = '
 <script>
+// Funzione per mostrare messaggi in un modale
+function showMessageModal(title, message, type) {
+  type = type || "info"; // success, error, warning, info
+  var $modal = $("#messageModal");
+  var $header = $("#messageModalHeader");
+  var $title = $("#messageModalTitle");
+  var $body = $("#messageModalBody");
+  var $text = $("#messageModalText");
+  
+  // Rimuovi tutte le classi di colore precedenti
+  $header.removeClass("bg-success bg-danger bg-warning bg-info");
+  
+  // Imposta il colore in base al tipo
+  if(type === "success") {
+    $header.addClass("bg-success text-white");
+    $title.html("<span class=\"fe fe-check-circle fe-16 mr-2\"></span>" + title);
+  } else if(type === "error") {
+    $header.addClass("bg-danger text-white");
+    $title.html("<span class=\"fe fe-alert-circle fe-16 mr-2\"></span>" + title);
+  } else if(type === "warning") {
+    $header.addClass("bg-warning text-white");
+    $title.html("<span class=\"fe fe-alert-triangle fe-16 mr-2\"></span>" + title);
+  } else {
+    $header.addClass("bg-info text-white");
+    $title.html("<span class=\"fe fe-info fe-16 mr-2\"></span>" + title);
+  }
+  
+  $text.text(message);
+  $modal.modal("show");
+}
+
 $(document).ready(function() {
   $( "#update" ).on("click", function(e) {
     e.preventDefault();
@@ -163,7 +194,7 @@ $(document).ready(function() {
           },
           error: function(xhr, status, error){
             console.error("API RESPONSE - Change Password ERROR:", {xhr: xhr, status: status, error: error});
-            alert("Purtroppo non ho potuto cambiare la password... qualcosa è andato storto");
+            showMessageModal("Errore", "Purtroppo non ho potuto cambiare la password... qualcosa è andato storto", "error");
           }
         });
   });
@@ -240,7 +271,7 @@ $(document).ready(function() {
       playerId = __PLAYER_ID_FOR_JS__;
     }
     if(!playerId || playerId === "" || playerId === "nuova") {
-      alert("ID player non trovato");
+      showMessageModal("Errore", "ID player non trovato", "error");
       console.error("ID player non trovato:", playerId);
       return false;
     }
@@ -276,10 +307,12 @@ $(document).ready(function() {
         console.log("  Server: https://yourradio.org");
         console.log("  Response:", res);
         if(res.success) {
-          alert("Player aggiornato con successo!");
-          window.location.reload();
+          showMessageModal("Successo", "Player aggiornato con successo!", "success");
+          setTimeout(function() {
+            window.location.reload();
+          }, 1500);
         } else {
-          alert("Errore: " + (res.error ? res.error.message : "Errore sconosciuto"));
+          showMessageModal("Errore", "Errore: " + (res.error ? res.error.message : "Errore sconosciuto"), "error");
           $submitBtn.prop("disabled", false).html(originalText);
         }
       },
@@ -299,7 +332,7 @@ $(document).ready(function() {
         if(xhr.status === 404) {
           errorMsg = "Endpoint API non trovato. Verifica che l API sia installata su yourradio.org";
         }
-        alert(errorMsg);
+        showMessageModal("Errore", errorMsg, "error");
         $submitBtn.prop("disabled", false).html(originalText);
       }
     });
@@ -556,46 +589,6 @@ $campagne = [];
                         </div>
                       </div>
 
-                      <div class="card shadow">
-                        <div class="card-header" id="heading-innsk-4">
-                          <a role="button" href="#collapse-innsk-4" data-toggle="collapse" data-target="#collapse-innsk-4" aria-expanded="false" aria-controls="collapse-innsk-4" class="title-tab ">
-                            <span class="fe fe-monitor fe-20"></span><strong>Digital Signage</strong>
-                          </a>
-                        </div>
-                        <div id="collapse-innsk-4" class="collapse" aria-labelledby="heading-innsk-4" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
-                          
-                          <div class="card-body">
-                            <div class="col-md-4 mb-3">
-                            <?php echo buildCheckByDbField("Digital Signage Attivo","pl_ds_attivo",$p[0]['pl_ds_attivo'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Audio","pl_ds_audio",$p[0]['pl_ds_audio'] ?? 0);?>
-
-                        
-
-
-                            <?php echo buildCheckByDbField("Videospot","pl_ds_videospot",$p[0]['pl_ds_videospot'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Videoclip","pl_ds_videoclip_on",$p[0]['pl_ds_videoclip_on'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Infobox Oroscopo","pl_ds_oroscopo_on",$p[0]['pl_ds_oroscopo_on'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Infobox News","pl_ds_news_on",$p[0]['pl_ds_news_on'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Infobox Meteo","pl_ds_meteo_on",$p[0]['pl_ds_meteo_on'] ?? 0);?>
-                            <?php echo buildCheckByDbField("Infobox ADV","pl_ds_adv_on",$p[0]['pl_ds_adv_on'] ?? 0);?>
-                          </div>
-                          <div class="col-md-4 mb-3">
-<label class="form-scheda-label">Campagna</label>
-                        <select class="form-control" name="pl_ds_campagna_id" id="pl_ds_campagna_id" >
-                          <?php 
-                          echo '<option value="" >NESSUNA</option>';
-                          foreach ($campagne as $c) {
-                            if($c['ds_camp_titolo']==''){continue;} ///cambiare con verifica scadenza
-
-                                if($c['ds_camp_id']==($p[0]['pl_ds_campagna_id'] ?? '')){$selected = "selected";}else{$selected = "";}
-                            echo '<option value="'.$c['ds_camp_id'].'" '.$selected.'>'.strtoupper($c['ds_camp_titolo']).'</option>';
-                          }?>
-                        </select>
-                      </div>
-
-                          </div>
-                        </div>
-                      </div>
 
 
 
@@ -664,6 +657,26 @@ $campagne = [];
                         <div class="modal-footer">
                           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
                           <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal" id="changePassword">Salva password</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Modal Messaggi -->
+                  <div class="modal fade" id="messageModal" tabindex="-1" role="dialog" aria-labelledby="messageModalTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered" role="document">
+                      <div class="modal-content">
+                        <div class="modal-header" id="messageModalHeader">
+                          <h5 class="modal-title" id="messageModalTitle">Messaggio</h5>
+                          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                          </button>
+                        </div>
+                        <div class="modal-body" id="messageModalBody">
+                          <p id="messageModalText"></p>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal">OK</button>
                         </div>
                       </div>
                     </div>
