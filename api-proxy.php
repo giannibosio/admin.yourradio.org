@@ -48,6 +48,8 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+// Disabilita la compressione automatica - vogliamo ricevere dati non compressi
+curl_setopt($ch, CURLOPT_ENCODING, '');
 
 // Passa il metodo HTTP
 $method = $_SERVER['REQUEST_METHOD'];
@@ -94,6 +96,19 @@ if ($error) {
     http_response_code(500);
     echo json_encode(['error' => 'Errore proxy: ' . $error, 'url' => $url]);
     exit;
+}
+
+// Controlla se la risposta è compressa (gzip) e decomprimi se necessario
+// Verifica se inizia con i byte magic di gzip (0x1f 0x8b)
+if (strlen($response) > 2 && ord($response[0]) === 0x1f && ord($response[1]) === 0x8b) {
+    error_log("PROXY: Risposta compressa rilevata, decomprimo...");
+    $decompressed = @gzdecode($response);
+    if ($decompressed !== false) {
+        $response = $decompressed;
+        error_log("PROXY: Risposta decompressa con successo");
+    } else {
+        error_log("PROXY WARNING: Impossibile decomprimere la risposta, invio originale");
+    }
 }
 
 error_log("PROXY SUCCESS: " . $url . " | HTTP " . $httpCode . " | Size: " . strlen($response) . " bytes");

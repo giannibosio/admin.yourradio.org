@@ -7,16 +7,11 @@ if(!isset($_SESSION["nome"])){
 
 include_once('load.php');
 
-// Inizializza il database solo se necessario (per operazioni che non possono essere fatte via API)
-// Su admin.yourradio.org il database potrebbe non essere accessibile direttamente
-try {
-    DB::init();
-    $dbAvailable = true;
-} catch (Exception $e) {
-    // Database non disponibile, useremo solo le API
-    $dbAvailable = false;
-    error_log("Database non disponibile, utilizzo solo API: " . $e->getMessage());
-}
+// NON usare più il database locale - SOLO API su yourradio.org
+$dbAvailable = false;
+
+// Include la funzione callApi
+require_once('inc/functions.php');
 
 $id=$_GET["id"] ?? '';
 if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
@@ -25,60 +20,14 @@ if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
   $title='Nuovo Player';
   $p = [];
 }else{
-  // Prova prima con il database, poi con l'API
-  $p = array();
-  if ($dbAvailable) {
-    try {
-      $p = Player::selectPlayerByID($id);
-    } catch (Exception $e) {
-      error_log("Errore nel caricamento player dal database: " . $e->getMessage());
-      // Fallback all'API
-      $dbAvailable = false;
-    }
-  }
+  // Carica player tramite API - SOLO API
+  $apiResponse = callApi("players/" . intval($id));
   
-  // Se il database non è disponibile o la query è fallita, usa l'API
-  if (!$dbAvailable || empty($p) || !isset($p[0])) {
-    $apiUrl = "https://yourradio.org/api/players/" . intval($id);
-    $ch = curl_init($apiUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if($httpCode == 200) {
-      $apiResponse = json_decode($response, true);
-      if(isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
-        // Converti il formato API al formato atteso dal codice esistente
-        $playerData = $apiResponse['data'];
-        $p = [[
-          'pl_id' => $playerData['pl_id'] ?? $id,
-          'pl_nome' => $playerData['pl_nome'] ?? '',
-          'pl_active' => $playerData['pl_active'] ?? 0,
-          'pl_player_pc' => $playerData['pl_player_pc'] ?? '',
-          'pl_player_ip' => $playerData['pl_player_ip'] ?? '',
-          'pl_riferimento' => $playerData['pl_riferimento'] ?? '',
-          'pl_mail' => $playerData['pl_mail'] ?? '',
-          'pl_telefono' => $playerData['pl_telefono'] ?? '',
-          'pl_citta' => $playerData['pl_citta'] ?? '',
-          'pl_indirizzo' => $playerData['pl_indirizzo'] ?? '',
-          'pl_pro' => $playerData['pl_pro'] ?? '',
-          'pl_cap' => $playerData['pl_cap'] ?? '',
-          'pl_note' => $playerData['pl_note'] ?? '',
-          'pl_idGruppo' => $playerData['pl_idGruppo'] ?? 0,
-          'gr_nome' => $playerData['gr_nome'] ?? '',
-          'gr_nat_port' => $playerData['gr_nat_port'] ?? '',
-          'pl_mem_percent' => $playerData['pl_mem_percent'] ?? 0,
-          'pl_mem_size' => $playerData['pl_mem_size'] ?? '',
-          'pl_mem_used' => $playerData['pl_mem_used'] ?? '',
-          'pl_mem_available' => $playerData['pl_mem_available'] ?? '',
-          'pl_player_ultimaDataEstesa' => $playerData['pl_player_ultimaDataEstesa'] ?? '',
-          'pl_keyword_md5' => $playerData['pl_keyword_md5'] ?? '',
-          'pl_dataCreazione' => $playerData['pl_dataCreazione'] ?? ''
-        ]];
-      }
-    }
+  if($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+    $playerData = $apiResponse['data'];
+    $p = [$playerData];
+  } else {
+    $p = [];
   }
   
   if(!empty($p) && isset($p[0])) {
@@ -192,61 +141,19 @@ $( "#update" ).click(function() {
 ';
 
 
-// Carica gruppi per la select - usa API se database non disponibile
+// Carica gruppi per la select - SOLO API
 $gruppi = array();
 $rete_id = isset($p[0]['pl_idGruppo']) ? $p[0]['pl_idGruppo'] : 0;
-if ($dbAvailable) {
-  try {
-    $gruppi = Gruppi::selectAllActive();
-  } catch (Exception $e) {
-    error_log("Errore nel caricamento gruppi: " . $e->getMessage());
-  }
-}
-if (empty($gruppi)) {
-  // Carica via API
-  $apiUrl = "https://yourradio.org/api/gruppi";
-  $ch = curl_init($apiUrl);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-  $response = curl_exec($ch);
-  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  curl_close($ch);
-  if ($httpCode == 200) {
-    $apiResponse = json_decode($response, true);
-    if (isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
-      foreach ($apiResponse['data'] as $g) {
-        $gruppi[] = [
-          'gr_id' => $g['id'],
-          'gr_nome' => $g['nome']
-        ];
-      }
-    }
-  }
+$gruppiApi = callApi("gruppi");
+if ($gruppiApi && isset($gruppiApi['success']) && $gruppiApi['success'] && isset($gruppiApi['data'])) {
+  $gruppi = $gruppiApi['data'];
 }
 
-///seleziona sottogruppi
+///seleziona sottogruppi - SOLO API (gestito da buildCheckSubGroupByIdPlayer)
 $sg = array();
-if (!empty($p) && isset($p[0]['pl_id'])) {
-  if ($dbAvailable) {
-    try {
-      $sg = Gruppi::selectSubGruppoByIdPlayer($p[0]['pl_id']);
-    } catch (Exception $e) {
-      error_log("Errore nel caricamento sottogruppi: " . $e->getMessage());
-    }
-  }
-}
 
-///seleziona tutte le campagne by gruppoid
+///seleziona tutte le campagne by gruppoid - TODO: implementare API endpoint se necessario
 $campagne = array();
-if (!empty($p) && isset($p[0]['pl_idGruppo'])) {
-  if ($dbAvailable) {
-    try {
-      $campagne = Gruppi::selectCampagneByIdGroup($p[0]['pl_idGruppo']);
-    } catch (Exception $e) {
-      error_log("Errore nel caricamento campagne: " . $e->getMessage());
-    }
-  }
-}
 
 
 

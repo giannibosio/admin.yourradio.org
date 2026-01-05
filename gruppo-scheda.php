@@ -6,18 +6,13 @@ if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
 
+// Include la funzione callApi
+require_once('inc/functions.php');
+
 //echo $_POST["formAction"];
 
-// Inizializza il database solo se necessario (per operazioni che non possono essere fatte via API)
-// Su admin.yourradio.org il database potrebbe non essere accessibile direttamente
-try {
-    DB::init();
-    $dbAvailable = true;
-} catch (Exception $e) {
-    // Database non disponibile, useremo solo le API
-    $dbAvailable = false;
-    error_log("Database non disponibile, utilizzo solo API: " . $e->getMessage());
-}
+// NON usare più il database locale - SOLO API su yourradio.org
+$dbAvailable = false;
 
 // Carica il gruppo dall'API invece del database locale
 $gruppoId = $_GET["id"] ?? '';
@@ -109,36 +104,18 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
   if($_POST["formAction"]=="back"){
     header("location:gruppi.php");
   }
-  // La cancellazione del gruppo è ora gestita tramite API
+  // Tutte le operazioni sono gestite tramite API - nessuna chiamata DB locale
   if($_POST["formAction"]=="deleteSubGroup"){
     $_POST["formAction"]='';
-    if ($dbAvailable) {
-      try {
-        $res=Gruppi::deleteSottoGruppoByID($_POST['SubGroupSelId'] ?? '');
-      } catch (Exception $e) {
-        error_log("Errore nella cancellazione sottogruppo: " . $e->getMessage());
-      }
-    }
+    // Gestito via API tramite JavaScript
   }
   if($_POST["formAction"]=="addNewSubGroup"){
     $_POST["formAction"]='';
-    if ($dbAvailable) {
-      try {
-        $res=Gruppi::addSottoGruppoByName($_GET["id"] ?? '',$_POST['newSubGroupName'] ?? '');
-      } catch (Exception $e) {
-        error_log("Errore nell'aggiunta sottogruppo: " . $e->getMessage());
-      }
-    }
+    // Gestito via API tramite JavaScript
   }
   if($_POST["formAction"]=="update"){
-      if ($dbAvailable) {
-        try {
-          $_GET["id"]=Gruppi::updateGruppo($_POST);
-          $_POST["formAction"]='';
-        } catch (Exception $e) {
-          error_log("Errore nell'aggiornamento gruppo: " . $e->getMessage());
-        }
-      }
+    // Gestito via API tramite JavaScript
+    $_POST["formAction"]='';
   }
   // L'upload del logo è ora gestito tramite API
 
@@ -146,47 +123,14 @@ if(isset($_POST["formAction"]) && $_POST["formAction"]!=''){
 include_once('inc/head.php');
 
 
-//scarico sottogruppi di questo gruppo ed i player collegati
-// Usa l'API se il database non è disponibile
+//scarico sottogruppi di questo gruppo - SOLO API
 $sgs = array();
 $tot = 0;
-if ($dbAvailable && !empty($_GET["id"])) {
-    try {
-        $sgs = Gruppi::selectSubGruppoById($_GET["id"] ?? '');
-        $tot = is_array($sgs) ? count($sgs) : 0;
-    } catch (Exception $e) {
-        error_log("Errore nel caricamento sottogruppi: " . $e->getMessage());
-        // Prova a caricare via API
-        $apiUrl = "https://yourradio.org/api/gruppi/" . intval($_GET["id"] ?? '') . "/subgruppi";
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode == 200) {
-            $apiResponse = json_decode($response, true);
-            if (isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
-                $sgs = $apiResponse['data'];
-                $tot = count($sgs);
-            }
-        }
-    }
-} elseif (!empty($_GET["id"])) {
-    // Carica via API se il database non è disponibile
-    $apiUrl = "https://yourradio.org/api/gruppi/" . intval($_GET["id"] ?? '') . "/subgruppi";
-    $ch = curl_init($apiUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($httpCode == 200) {
-        $apiResponse = json_decode($response, true);
-        if (isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
-            $sgs = $apiResponse['data'];
-            $tot = count($sgs);
-        }
+if (!empty($_GET["id"])) {
+    $apiResponse = callApi("gruppi/" . intval($_GET["id"] ?? '') . "/subgruppi");
+    if ($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+        $sgs = $apiResponse['data'];
+        $tot = count($sgs);
     }
 }
 $tableSubGruppi='
@@ -204,17 +148,7 @@ $tableSubGruppi='
     <tbody>';
     if($tot>0){
 foreach($sgs as $sg){
-  $totPlayers = 0;
-  if ($dbAvailable) {
-    try {
-      $plsgr = Gruppi::selectTotPlayersSottoGruppoById($sg['sgr_id'] ?? $sg['id']);
-      $totPlayers = isset($plsgr[0]['tot_player']) ? $plsgr[0]['tot_player'] : (isset($sg['tot_player']) ? $sg['tot_player'] : 0);
-    } catch (Exception $e) {
-      $totPlayers = isset($sg['tot_player']) ? $sg['tot_player'] : 0;
-    }
-  } else {
-    $totPlayers = isset($sg['tot_player']) ? $sg['tot_player'] : 0;
-  }
+  $totPlayers = isset($sg['tot_player']) ? $sg['tot_player'] : 0;
   $buttonClass = $totPlayers > 0 ? "btn-outline-success" : "btn-outline-danger";
   $tableSubGruppi.='
   <tr>
@@ -245,14 +179,11 @@ $tableSubGruppi.='</tbody>
                   </div></div>';
 
 
-// Carica RSS list - usa API se database non disponibile
+// Carica RSS list - SOLO API
 $rssList = array();
-if ($dbAvailable) {
-    try {
-        $rssList = Gruppi::selectAllRss();
-    } catch (Exception $e) {
-        error_log("Errore nel caricamento RSS: " . $e->getMessage());
-    }
+$rssApiResponse = callApi("rss");
+if ($rssApiResponse && isset($rssApiResponse['success']) && $rssApiResponse['success'] && isset($rssApiResponse['data'])) {
+    $rssList = $rssApiResponse['data'];
 }
 
 // Inizializzazione variabili per le tabelle e gli script
@@ -349,7 +280,7 @@ $(document).ready(function() {
 
   $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(){
     var id=$(this).attr("id");
-    openSchedaOnTab("player-inner-scheda.php?id="+id,"tab-players");
+    window.location.href = "player-scheda.php?id="+id;
   });
 
 });
@@ -753,14 +684,11 @@ $(document).ready(function() {
 ';
 
 
-// Carica gruppi attivi - usa API se database non disponibile
+// Carica gruppi attivi - SOLO API
 $gruppi = array();
-if ($dbAvailable) {
-    try {
-        $gruppi = Gruppi::selectAllActive();
-    } catch (Exception $e) {
-        error_log("Errore nel caricamento gruppi: " . $e->getMessage());
-    }
+$gruppiApiResponse = callApi("gruppi");
+if ($gruppiApiResponse && isset($gruppiApiResponse['success']) && $gruppiApiResponse['success'] && isset($gruppiApiResponse['data'])) {
+    $gruppi = $gruppiApiResponse['data'];
 }
 
 
@@ -846,12 +774,8 @@ $script='
     if (playerId) {
       // Chiudi la modale
       $("#playersSubgruppoModal").modal("hide");
-      // Attiva il tab Players
-      $("#gruppo-tab-players").click();
-      // Apri la scheda del player nella tab players
-      setTimeout(function() {
-        openSchedaOnTab("player-inner-scheda.php?id=" + playerId, "tab-players");
-      }, 100);
+      // Apri la scheda del player in una nuova pagina
+      window.location.href = "player-scheda.php?id=" + playerId;
     }
   });
 

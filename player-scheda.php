@@ -6,7 +6,13 @@ if(!isset($_SESSION["nome"])){
   header("location:auth-login.php");
 }
 
-include_once('inc/head.php');
+// Rileva se è una richiesta AJAX (caricata dentro un div)
+$isAjaxRequest = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+
+// Se non è AJAX, include head e menu
+if (!$isAjaxRequest) {
+    include_once('inc/head.php');
+}
 
 $id=$_GET["id"] ?? '';
 if(!isset($_GET["id"]) || $_GET["id"]==0 || $_GET["id"]==''){
@@ -85,30 +91,40 @@ if(!empty($p) && isset($p[0])) {
   $chbox_active_lab="Disattivato";
 }
 
-$script='
+$playerIdFallback = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$playerIdForJs = (!empty($_GET['id']) && isset($_GET['id'])) ? intval($_GET['id']) : 0;
+$gruppoIdForJs = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0;
+$userIdForPassword = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$script = '
 <script>
-$( "#update" ).click(function(e) {
+$(document).ready(function() {
+  $( "#update" ).on("click", function(e) {
     e.preventDefault();
+    e.stopPropagation();
     $("#formActionPlayer").val("update");
     console.log("Click su update, formAction impostato a update");
     $( "#scheda-profilo" ).submit();
+    return false;
   });
-  $( "#delete" ).click(function() {
+  
+  $( "#delete" ).on("click", function() {
     $("#formActionPlayer").val("delete");
     console.log("cancella scheda ");
     $( "#scheda-profilo" ).submit();
   });
-  $( ".back-lista" ).click(function() {
+  
+  $( ".back-lista" ).on("click", function() {
     $("#formActionPlayer").val("back");
     console.log("torna alla scheda del gruppo");
-    var gruppoId = '.((!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0).';
+    var gruppoId = __GRUPPO_ID_FOR_JS__;
     if(gruppoId > 0) {
-      window.open("gruppo-scheda.php?id=" + gruppoId, "_self");
+      window.location.href = "gruppo-scheda.php?id=" + gruppoId;
     } else {
-      window.open("gruppi.php", "_self");
+      window.location.href = "gruppi.php";
     }
   });
-  $( "#changePassword" ).click(function() {
+  
+  $( "#changePassword" ).on("click", function() {
     $("#formActionPlayer").val("changepassword");
     var newPass=$("#newPassword").val();
     if(newPass==""){
@@ -118,12 +134,13 @@ $( "#update" ).click(function(e) {
     
     // Determina se usare il proxy (da localhost)
     var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    var apiUrl = "https://yourradio.org/api/utenti/'.$_GET["id"].'/password";
-    var finalUrl = isLocalhost ? "api-proxy.php?url=" + encodeURIComponent(apiUrl) : apiUrl;
+    var apiUrl = "https://yourradio.org/api/utenti/__USER_ID_FOR_PASSWORD__/password";
+    // Usa percorso assoluto per il proxy quando caricato via AJAX
+    var proxyPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf(\'/\')) + \'/api-proxy.php\';
+    var finalUrl = isLocalhost ? proxyPath + "?url=" + encodeURIComponent(apiUrl) : apiUrl;
     
     console.log("API CALL - Change Password");
     console.log("  Server: https://yourradio.org");
-    console.log("  Endpoint: /api/utenti/'.$_GET["id"].'/password");
     console.log("  Method: PUT");
     console.log("  Using proxy: " + isLocalhost);
     console.log("  Final URL: " + finalUrl);
@@ -153,6 +170,14 @@ $( "#update" ).click(function(e) {
     var formAction = $("#formActionPlayer").val();
     console.log("Form submit - formAction:", formAction);
     
+    // Se formAction è vuoto, potrebbe essere un submit diretto del form (non dal pulsante)
+    // In quel caso, imposta "update" come default
+    if(!formAction || formAction === "") {
+      console.log("FormAction vuoto, imposto update come default");
+      formAction = "update";
+      $("#formActionPlayer").val("update");
+    }
+    
     if(formAction !== "update") {
       console.log("FormAction non è update, procedo con submit normale");
       return true; // Lascia gestire altri formAction normalmente
@@ -179,18 +204,26 @@ $( "#update" ).click(function(e) {
           }
         } else {
           var val = $field.val();
-          if(val !== null && val !== undefined) {
+          // Gestisci esplicitamente il campo rete_id - deve essere sempre incluso anche se 0
+          if(name === "rete_id") {
+            formData[name] = parseInt(val) || 0;
+          } else if(val !== null && val !== undefined) {
             formData[name] = val;
           }
         }
       }
     });
     
+    // Assicurati che rete_id sia sempre presente (anche se 0)
+    if(!("rete_id" in formData)) {
+      formData.rete_id = 0;
+    }
+    
     console.log("Dati form raccolti:", formData);
     
     var playerId = formData.pl_id;
     if(!playerId) {
-      playerId = "'.($_GET["id"] ?? '').'";
+      playerId = __PLAYER_ID_FOR_JS__;
     }
     if(!playerId || playerId === "" || playerId === "nuova") {
       alert("ID player non trovato");
@@ -203,7 +236,9 @@ $( "#update" ).click(function(e) {
     // Determina se usare il proxy (da localhost)
     var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     var apiUrl = "https://yourradio.org/api/players/" + playerId;
-    var finalUrl = isLocalhost ? "api-proxy.php?url=" + encodeURIComponent(apiUrl) : apiUrl;
+    // Usa percorso assoluto per il proxy quando caricato via AJAX
+    var proxyPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf(\'/\')) + \'/api-proxy.php\';
+    var finalUrl = isLocalhost ? proxyPath + "?url=" + encodeURIComponent(apiUrl) : apiUrl;
     
     console.log("API CALL - Update Player");
     console.log("  Server: https://yourradio.org");
@@ -265,9 +300,12 @@ $( "#update" ).click(function(e) {
   // Inizializza il grafico SDmem - deve essere eseguito dopo che gauge.min.js è caricato
   // e dopo che l elemento SDmem è nel DOM
 
-
+}); // Fine document.ready
 </script>
 ';
+$script = str_replace('__PLAYER_ID_FOR_JS__', $playerIdForJs, $script);
+$script = str_replace('__GRUPPO_ID_FOR_JS__', $gruppoIdForJs, $script);
+$script = str_replace('__USER_ID_FOR_PASSWORD__', $userIdForPassword, $script);
 
 
 // Carica gruppi per la select - SEMPRE usa https://yourradio.org/api
@@ -281,6 +319,7 @@ if($gruppiApi && isset($gruppiApi['success']) && $gruppiApi['success'] && isset(
   error_log("PLAYER-SCHEDA ERROR: Errore nel caricamento gruppi - " . (isset($gruppiApi['error']) ? json_encode($gruppiApi['error']) : 'Risposta non valida'));
 }
 
+// Usa sempre pl_idGruppo dal database (recuperato dall'API)
 $rete_id = (!empty($p) && isset($p[0]['pl_idGruppo'])) ? $p[0]['pl_idGruppo'] : 0;
 
 ///seleziona sottogruppi - TODO: implementare API endpoint se necessario
@@ -293,6 +332,7 @@ $campagne = [];
 
 ?>
 
+<?php if (!$isAjaxRequest): ?>
 <body class="horizontal dark">
   <div class="wrapper">
     <?php include_once('inc/menu-h.php'); ?>
@@ -300,6 +340,9 @@ $campagne = [];
       <div class="container-fluid">
         <div class="row justify-content-center">
           <div class="col-12 col-lg-10 col-xl-6">
+<?php else: ?>
+           <div class="col-12 col-lg-10 col-xl-12">
+<?php endif; ?>
             <div class="my-4">
 
               <div class="alert alert-primary" style="display:none" role="alert">
@@ -309,6 +352,7 @@ $campagne = [];
 
               <div class="my-4">
 
+                <?php if (!$isAjaxRequest): ?>
                 <div class="row mt-5 align-items-center">
                   <div class="col-md-12 text-center mb-5">
                      <img src="./assets/images/<?=$logo?>" class="navbar-brand-img brand-sm mx-auto mb-4" alt="...">
@@ -320,6 +364,18 @@ $campagne = [];
                         <?php }?>
                   </div>
                 </div>
+                <?php else: ?>
+                <div class="row mt-2 align-items-center">
+                  <div class="col-md-2 text-center mb-0">
+                     <img src="./assets/images/<?=$logo?>" class="navbar-brand-img brand-sm mx-auto mb-4" alt="...">
+                  </div>
+                  <div class="col-md-10 text-left mb-0">
+                      <?php if($external_url!=''){?>
+                        <button type="button" class="btn btn-primary" onclick="window.open('<?=$external_url?>','_blank');">Player on-line</button>
+                      <?php }?>
+                  </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="card-body">
 
@@ -408,15 +464,15 @@ $campagne = [];
                       </div>
                     </div>
                    
-                    <div class="accordion w-100" id="accordion1">
+                    <div class="accordion w-100 <?php echo $isAjaxRequest ? 'inner-scheda' : ''; ?>" id="accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
 
                       <div class="card shadow">
-                        <div class="card-header" id="heading1">
-                          <a role="button" href="#collapse1" data-toggle="collapse" data-target="#collapse1" aria-expanded="true" aria-controls="collapse1" class="title-tab">
+                        <div class="card-header" id="heading-innsk-1">
+                          <a role="button" href="#collapse-innsk-1" data-toggle="collapse" data-target="#collapse1-innsk-" aria-expanded="true" aria-controls="collapse-innsk-1" class="title-tab">
                             <span class="fe fe-activity fe-20"></span><strong>Ping<?php echo $m=($type=="RASPI")? ' e SD Memory' : '';;?> </strong>
                           </a>
                         </div>
-                        <div id="collapse1" class="collapse show" aria-labelledby="heading1" data-parent="#accordion1" style="">
+                        <div id="collapse1-innsk-" class="collapse show" aria-labelledby="heading-innsk-1" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>" style="">
                           <div class="card-body">
                             <i><h10>
                             ultimo ping: <?=$p[0]['pl_player_ultimaDataEstesa'] ?? ''?><br>
@@ -448,12 +504,12 @@ $campagne = [];
                       </div>
 
                       <div class="card shadow">
-                        <div class="card-header" id="heading1">
-                          <a role="button" href="#collapse2" data-toggle="collapse" data-target="#collapse2" aria-expanded="false" aria-controls="collapse2" class="title-tab collapsed">
+                        <div class="card-header" id="heading-innsk-2">
+                          <a role="button" href="#collapse-innsk-2" data-toggle="collapse" data-target="#collapse-innsk-2" aria-expanded="false" aria-controls="collapse-innsk-2" class="title-tab collapsed">
                             <span class="fe fe-tool fe-20"></span><strong>Configurazioni avanzate</strong>
                           </a>
                         </div>
-                        <div id="collapse2" class="collapse" aria-labelledby="heading2" data-parent="#accordion1" style="">
+                        <div id="collapse-innsk-2" class="collapse" aria-labelledby="heading-innsk-2" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>" style="">
                           <div class="card-body">
                             <?php echo buildCheckByDbField("Ora esatta","pl_time",$p[0]['pl_time'] ?? 0);?>
                             <?php echo buildCheckByDbField("Multiutente","pl_player_freeaccess",$p[0]['pl_player_freeaccess'] ?? 0);?>
@@ -486,12 +542,12 @@ $campagne = [];
                       </div>
 
                       <div class="card shadow">
-                        <div class="card-header" id="heading1">
-                          <a role="button" href="#collapse3" data-toggle="collapse" data-target="#collapse3" aria-expanded="false" aria-controls="collapse3" class="title-tab ">
+                        <div class="card-header" id="heading-innsk-3">
+                          <a role="button" href="#collapse-innsk-3" data-toggle="collapse" data-target="#collapse-innsk-3" aria-expanded="false" aria-controls="collapse-innsk-3" class="title-tab ">
                             <span class="fe fe-layers fe-20"></span><strong>Sottogruppi</strong>
                           </a>
                         </div>
-                        <div id="collapse3" class="collapse" aria-labelledby="heading3" data-parent="#accordion1">
+                        <div id="collapse-innsk-3" class="collapse" aria-labelledby="heading-innsk-3" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
                           <div class="card-body">
                             <?php echo buildCheckSubGroupByIdPlayer($p[0]['pl_id'] ?? 0);?>
                           </div>
@@ -499,12 +555,12 @@ $campagne = [];
                       </div>
 
                       <div class="card shadow">
-                        <div class="card-header" id="heading1">
-                          <a role="button" href="#collapse4" data-toggle="collapse" data-target="#collapse4" aria-expanded="false" aria-controls="collapse4" class="title-tab ">
+                        <div class="card-header" id="heading-innsk-4">
+                          <a role="button" href="#collapse-innsk-4" data-toggle="collapse" data-target="#collapse-innsk-4" aria-expanded="false" aria-controls="collapse-innsk-4" class="title-tab ">
                             <span class="fe fe-monitor fe-20"></span><strong>Digital Signage</strong>
                           </a>
                         </div>
-                        <div id="collapse4" class="collapse" aria-labelledby="heading3" data-parent="#accordion1">
+                        <div id="collapse-innsk-4" class="collapse" aria-labelledby="heading-innsk-4" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
                           
                           <div class="card-body">
                             <div class="col-md-4 mb-3">
@@ -555,10 +611,14 @@ $campagne = [];
 
 
                     <!-- Button bar -->
-                    <div class="button-bar">
-                      <button title="salva" class="btn btn-outline-success" type="submit" id="update"><span class="fe fe-save fe-16"></span></button>
+                    <div class="button-bar <?php echo $isAjaxRequest ? 'skinn' : ''; ?>">
+                      <button title="Salva" class="btn <?php echo $isAjaxRequest ? 'btn-success' : 'btn-outline-success'; ?>" type="button" id="<?php echo $isAjaxRequest ? 'player-skinn-update' : 'update'; ?>"><?php echo $isAjaxRequest ? 'Salva' : '<span class="fe fe-save fe-16"></span>'; ?></button>
+                      <?php if ($isAjaxRequest): ?>
+                      <button title="Chiudi" class="btn btn-success" id="player-skinn-chiudi" >Chiudi</button>
+                      <?php else: ?>
                       <button title="lista" class="btn btn-outline-success back-lista" ><span class="fe fe-list fe-16"></span></button>
-                      <button <?=$disabled?>title="cancella" type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#verticalModal"><span class="fe fe-trash fe-16"></span></button>
+                      <?php endif; ?>
+                      <button <?=$disabled?>title="cancella" type="button" class="btn btn-<?php echo $isAjaxRequest ? 'danger' : 'outline-danger'; ?>" data-toggle="modal" data-target="#verticalModal"><span class="fe fe-trash fe-16"></span></button>
                     </div>
                   </form>
 
@@ -572,7 +632,7 @@ $campagne = [];
                             <span aria-hidden="true">&times;</span>
                           </button>
                         </div>
-                        <div class="modal-body">Eliminare definitivamente il profilo di <?=strtoupper($nome)?>?</div>
+                        <div class="modal-body">Eliminare definitivamente il profilo di <?=strtoupper($p[0]['pl_nome'] ?? '')?>?</div>
                         <div class="modal-footer">
                           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
                           <button class="btn mb-2 btn-danger" id="delete">Cancella</button>
@@ -614,12 +674,15 @@ $campagne = [];
               </div> <!-- /.my-4 -->
             </div> <!-- /.my-4 -->
           </div> <!-- /.col-12 col-lg-10 col-xl-8 -->
+<?php if (!$isAjaxRequest): ?>
         </div> <!-- .row -->
       </div> <!-- .container-fluid -->
     <?php include_once('./inc/slide-right.php');?>
     </main> <!-- main -->
   </div> <!-- .wrapper -->
+<?php endif; ?>
 
+<?php if (!$isAjaxRequest): ?>
   <script src="js/jquery.min.js"></script>
   <script src="js/popper.min.js"></script>
   <script src="js/moment.min.js"></script>
@@ -640,40 +703,69 @@ $campagne = [];
   <script src='js/quill.min.js'></script>
 
   <script src="js/gauge.min.js"></script>
+<?php else: ?>
+  <!-- Script caricati solo se gauge.min.js non è già presente -->
+  <script>
+    if (typeof Gauge === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'js/gauge.min.js';
+      document.head.appendChild(script);
+    }
+  </script>
+<?php endif; ?>
   
   <?=$script?>
+  
+  <script>
+    // Gestione chiusura scheda quando caricata via AJAX
+    $(document).ready(function() {
+      $("#player-skinn-chiudi").on("click", function() {
+        closeChildTab("tab-players");
+      });
+    });
+    
+    // Funzione closeChildTab se non esiste (per compatibilità)
+    if (typeof closeChildTab === 'undefined') {
+      function closeChildTab(tab) {
+        $(".tabs-scheda-gruppo."+tab+">.mb-3>.child-tab").html(""); 
+        $(".tabs-scheda-gruppo."+tab+">.mb-3>.primary-tab").fadeIn("slow");
+      }
+    }
+  </script>
 
 
   <script>
     //i numeri sono formattati per l'utilizzo dell'ora nella scheda player
-    var timeOn = ("0" + $("#pl_client_ora_on_ora").val()).slice(-2)+":"+("0" + $("#pl_client_ora_on_min").val()).slice(-2);
-    $("#timeOn").val(timeOn);
-    var timeOff = ("0" + $("#pl_client_ora_off_ora").val()).slice(-2)+":"+("0" + $("#pl_client_ora_off_min").val()).slice(-2);
-    $("#timeOff").val(timeOff);
+    $(document).ready(function() {
+      var timeOn = ("0" + $("#pl_client_ora_on_ora").val()).slice(-2)+":"+("0" + $("#pl_client_ora_on_min").val()).slice(-2);
+      $("#timeOn").val(timeOn);
+      var timeOff = ("0" + $("#pl_client_ora_off_ora").val()).slice(-2)+":"+("0" + $("#pl_client_ora_off_min").val()).slice(-2);
+      $("#timeOff").val(timeOff);
 
-    $("#timeOn").on("change", function(){
-      var tm = $("#timeOn").val();
-      var tt = tm.split(":");
-      var hh = tt[0];
-      var mm = tt[1];
-      var calc = parseInt(hh*60)+parseInt(mm);
-      if(hh.charAt(0)==0){hh=hh.substr(-1);}
-      if(mm.charAt(0)==0){mm=mm.substr(-1);}
-      $("#pl_client_ora_on_ora").val(hh);
-      $("#pl_client_ora_on_min").val(mm);
-      $("#pl_oraOnCalcolata").val(calc);
-    });
-    $("#timeOff").on("change", function(){
-      var tm = $("#timeOff").val();
-      var tt = tm.split(":");
-      var hh = tt[0];
-      var mm = tt[1];
-      var calc = parseInt(hh*60)+parseInt(mm);
-      if(hh.charAt(0)==0){hh=hh.substr(-1);}
-      if(mm.charAt(0)==0){mm=mm.substr(-1);}
-      $("#pl_client_ora_off_ora").val(hh);
-      $("#pl_client_ora_off_min").val(mm);
-      $("#pl_oraOffCalcolata").val(calc);
+      $("#timeOn").on("change", function(){
+        var tm = $("#timeOn").val();
+        var tt = tm.split(":");
+        var hh = tt[0];
+        var mm = tt[1];
+        var calc = parseInt(hh*60)+parseInt(mm);
+        if(hh.charAt(0)==0){hh=hh.substr(-1);}
+        if(mm.charAt(0)==0){mm=mm.substr(-1);}
+        $("#pl_client_ora_on_ora").val(hh);
+        $("#pl_client_ora_on_min").val(mm);
+        $("#pl_oraOnCalcolata").val(calc);
+      });
+      $("#timeOff").on("change", function(){
+        var tm = $("#timeOff").val();
+        var tt = tm.split(":");
+        var hh = tt[0];
+        var mm = tt[1];
+        var calc = parseInt(hh*60)+parseInt(mm);
+        if(hh.charAt(0)==0){hh=hh.substr(-1);}
+        if(mm.charAt(0)==0){mm=mm.substr(-1);}
+        $("#pl_client_ora_off_ora").val(hh);
+        $("#pl_client_ora_off_min").val(mm);
+        $("#pl_oraOffCalcolata").val(calc);
+      });
     });
   </script>  
 
@@ -683,7 +775,7 @@ $campagne = [];
       setTimeout(function() {
         var sdMemElement = document.getElementById("SDmem");
         if(sdMemElement && typeof Gauge !== 'undefined') {
-          var memPercent = parseFloat('.((!empty($p) && isset($p[0]['pl_mem_percent'])) ? floatval($p[0]['pl_mem_percent']) : 0).') || 0;
+          var memPercent = parseFloat('<?php echo (!empty($p) && isset($p[0]['pl_mem_percent'])) ? (float)$p[0]['pl_mem_percent'] : 0; ?>') || 0;
           console.log("Inizializzazione grafico SDmem - Elemento trovato, valore:", memPercent);
           
           try {
@@ -716,6 +808,7 @@ $campagne = [];
     });
   </script>
 
+<?php if (!$isAjaxRequest): ?>
   <script>
 
     $('.select2').select2(
@@ -920,6 +1013,8 @@ $campagne = [];
         });
       }
   </script>
+<?php endif; ?>
+<?php if (!$isAjaxRequest): ?>
   <script src="js/apps.js"></script>
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=UA-56159088-1"></script>
@@ -933,6 +1028,6 @@ $campagne = [];
       gtag('js', new Date());
       gtag('config', 'UA-56159088-1');
   </script>
-
 </body>
 </html>
+<?php endif; ?>

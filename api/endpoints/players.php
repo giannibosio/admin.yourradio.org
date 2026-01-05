@@ -104,7 +104,11 @@ function handlePlayersRequest($method, $action, $id, $data) {
                     ];
 
                     foreach($fieldMapping as $formField => $dbField) {
-                        if(isset($data[$formField])) {
+                        // Gestisci esplicitamente rete_id - deve essere sempre incluso anche se 0
+                        if($formField === 'rete_id') {
+                            $updateFields[] = "`".$dbField."` = :".$dbField;
+                            $params[':'.$dbField] = isset($data[$formField]) ? intval($data[$formField]) : 0;
+                        } elseif(isset($data[$formField])) {
                             $updateFields[] = "`".$dbField."` = :".$dbField;
                             $params[':'.$dbField] = $data[$formField];
                         }
@@ -141,11 +145,26 @@ function handlePlayersRequest($method, $action, $id, $data) {
                     }
 
                     $query = "UPDATE `players` SET " . implode(", ", $updateFields) . " WHERE `pl_id` = :pl_id";
+                    error_log("UPDATE PLAYER QUERY: " . $query);
+                    error_log("UPDATE PLAYER PARAMS: " . json_encode($params));
                     $st = DB::$db->prepare($query);
-                    $st->execute($params);
+                    $result = $st->execute($params);
+                    $rowsAffected = $st->rowCount();
+                    error_log("UPDATE PLAYER RESULT: rows affected = " . $rowsAffected);
 
-                    $player = Player::selectPlayerByID($playerId);
+                    // Verifica se l'UPDATE ha funzionato
+                    if ($rowsAffected === 0) {
+                        error_log("UPDATE PLAYER WARNING: Nessuna riga aggiornata per player ID " . $playerId);
+                    }
+
+                    // Recupera il player aggiornato - usa LEFT JOIN per gestire pl_idGruppo = 0
+                    $querySelect = "SELECT p.*, g.* FROM players p LEFT JOIN gruppi g ON(p.pl_idGruppo=g.gr_id) WHERE p.pl_id=:id";
+                    $stSelect = DB::$db->prepare($querySelect);
+                    $stSelect->execute([':id' => $playerId]);
+                    $player = $stSelect->fetchAll();
+                    
                     if (empty($player)) {
+                        error_log("UPDATE PLAYER ERROR: Player non trovato dopo UPDATE - ID: " . $playerId);
                         sendErrorResponse("Player non trovato dopo l'aggiornamento", 404);
                     }
                     sendSuccessResponse($player[0], "Player aggiornato con successo");

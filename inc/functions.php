@@ -375,10 +375,10 @@ function buildCheckSubGroupByIdPlayer($id){
                     DB::init();
                 }
                 $res = Gruppi::selectSubGruppoByIdPlayer($id);
-                foreach($res as $sg){
+    foreach($res as $sg){
                     $getCheck = Gruppi::getCheckRelatedSubGruppoByIdPlayer($id, $sg['sgr_id']);
-                    if(!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked']==1){$checked=" checked ";}else{$checked="";}
-                    $check.='
+        if(!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked']==1){$checked=" checked ";}else{$checked="";}
+        $check.='
     <div class="custom-control custom-checkbox">
         <input type="checkbox" class="custom-control-input" id="subgruppo_'.$sg['sgr_id'].'" name="subgruppo_'.$sg['sgr_id'].'" value="1" '.$checked.'>
         <label class="custom-control-label" for="subgruppo_'.$sg['sgr_id'].'">'.$sg['sgr_nome'].'-'.$sg['sgr_id'].'</label>
