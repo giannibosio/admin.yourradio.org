@@ -558,6 +558,28 @@ $(document).ready(function() {
     console.log("VALORE INIZIALE pl_idGruppo (hidden) al caricamento pagina:", initialPlIdGruppo, "| tipo:", typeof initialPlIdGruppo);
     console.log("Valore pl_idGruppo dal server (PHP):", serverPlIdGruppo);
     
+    // Gestione switch Router Dinamico
+    $("#pl_player_router_dinamico").on("change", function() {
+      var $switchContainer = $(this).closest(".d-flex");
+      var $statusSpan = $switchContainer.find("span.ml-2");
+      if($(this).is(":checked")) {
+        $statusSpan.text("DNS DINAMICO ON");
+      } else {
+        $statusSpan.text("DNS DINAMICO");
+      }
+    });
+    
+    // Gestione switch Online
+    $("#pl_player_online").on("change", function() {
+      var $switchContainer = $(this).closest(".d-flex");
+      var $statusSpan = $switchContainer.find("span.ml-2");
+      if($(this).is(":checked")) {
+        $statusSpan.text("PLAYER ONLINE");
+      } else {
+        $statusSpan.text("PLAYER OFFLINE");
+      }
+    });
+    
     // Gestione del campo pl_keyword: readonly e cliccabile per aprire modale
     var playerId = __PLAYER_ID_FOR_JS__;
     var $plKeywordField = $("#pl_keyword");
@@ -1134,6 +1156,128 @@ $campagne = [];
                         <div id="collapse-innsk-3" class="collapse" aria-labelledby="heading-innsk-3" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
                           <div class="card-body">
                             <?php echo buildCheckSubGroupByIdPlayer($p[0]['pl_id'] ?? 0);?>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="card shadow">
+                        <div class="card-header" id="heading-innsk-4">
+                          <a role="button" href="#collapse-innsk-4" data-toggle="collapse" data-target="#collapse-innsk-4" aria-expanded="false" aria-controls="collapse-innsk-4" class="title-tab collapsed">
+                            <span class="fe fe-link fe-20"></span><strong>Collegamenti</strong>
+                          </a>
+                        </div>
+                        <div id="collapse-innsk-4" class="collapse" aria-labelledby="heading-innsk-4" data-parent="#accordion-<?php echo $isAjaxRequest ? 'player-inner-scheda' : '1'; ?>">
+                          <div class="card-body">
+                            <style>
+                              #collapse-innsk-4 .badge {
+                                font-size: 100%;
+                              }
+                            </style>
+                            <div class="mb-3">
+                              <strong>Free Access:</strong> <?php echo ($p[0]['pl_player_freeaccess'] ?? 0) == 1 ? '<span class="badge badge-success">Attivo</span>' : '<span class="badge badge-secondary">Disattivo</span>'; ?>
+                            </div>
+                            <div class="mb-3">
+                              <strong>IP Pubblico:</strong> <?=$p[0]['pl_player_ip'] ?? ''?>
+                            </div>
+                            <div class="mb-3">
+                              <strong>Porta 80:</strong> <?php 
+                              $port80 = $p[0]['port_80'] ?? null;
+                              if($port80 !== null && ($port80 === 1 || $port80 === '1' || (is_string($port80) && (strtolower($port80) === 'open' || strtolower($port80) === 'aperta')))) {
+                                echo '<span class="badge badge-success">OPEN</span>';
+                              } elseif($port80 !== null && ($port80 === 0 || $port80 === '0' || (is_string($port80) && (strtolower($port80) === 'closed' || strtolower($port80) === 'chiusa')))) {
+                                echo '<span class="badge badge-danger">CLOSED</span>';
+                              } else {
+                                echo '<span class="badge badge-secondary">NOT TESTED</span>';
+                              }
+                              ?>
+                            </div>
+                            <div class="mb-3">
+                              <strong>Porta 22:</strong> <?php 
+                              $port22 = $p[0]['port_22'] ?? null;
+                              if($port22 !== null && ($port22 === 1 || $port22 === '1' || (is_string($port22) && (strtolower($port22) === 'open' || strtolower($port22) === 'aperta')))) {
+                                echo '<span class="badge badge-success">OPEN</span>';
+                              } elseif($port22 !== null && ($port22 === 0 || $port22 === '0' || (is_string($port22) && (strtolower($port22) === 'closed' || strtolower($port22) === 'chiusa')))) {
+                                echo '<span class="badge badge-danger">CLOSED</span>';
+                              } else {
+                                echo '<span class="badge badge-secondary">NOT TESTED</span>';
+                              }
+                              ?>
+                            </div>
+                            <div class="mb-3">
+                              <strong>IP Device:</strong> <?=$p[0]['pl_player_pc'] ?? ''?>
+                            </div>
+                            
+                            
+                              
+                              <div class="mb-3">
+                                <div class="d-flex align-items-center">
+                                  <div class="custom-control custom-switch">
+                                    <?php 
+                                    $routerDinamicoRaw = $p[0]['pl_player_router_dinamico'] ?? null;
+                                    $routerDinamicoValue = false;
+                                    if($routerDinamicoRaw !== null) {
+                                      $routerDinamicoValue = ($routerDinamicoRaw == 1 || $routerDinamicoRaw == '1' || (is_string($routerDinamicoRaw) && (strtolower($routerDinamicoRaw) == 'yes' || strtolower($routerDinamicoRaw) == 'si')));
+                                    }
+                                    ?>
+                                    <input type="checkbox" class="custom-control-input" id="pl_player_router_dinamico" name="pl_player_router_dinamico" value="1" <?php echo $routerDinamicoValue ? 'checked' : ''; ?>>
+                                    <label class="custom-control-label" for="pl_player_router_dinamico"></label>
+                                  </div>
+                                  <span class="ml-2"><?php echo $routerDinamicoValue ? 'DNS DINAMICO ON' : 'DNS DINAMICO'; ?></span>
+                                </div>
+                              </div>
+
+
+                              <div class="mb-3">
+                                <label class="form-scheda-label">Network</label>
+                                <select class="form-control" id="pl_player_network" name="pl_player_network" style="max-width: 150px;">
+                                  <?php
+                                  // Recuperare le networks dalla tabella Networks tramite API
+                                  $currentNetwork = isset($p[0]['pl_player_network']) ? intval($p[0]['pl_player_network']) : 1;
+                                  $networksApi = callApi("networks");
+                                  $networks = [];
+                                  if($networksApi && isset($networksApi['success']) && $networksApi['success'] && isset($networksApi['data'])) {
+                                    foreach($networksApi['data'] as $net) {
+                                      $networks[$net['id']] = $net['name'];
+                                    }
+                                  } else {
+                                    // Fallback se l'API non funziona
+                                    $networks = [1 => 'Free'];
+                                  }
+                                  foreach($networks as $netId => $netName) {
+                                    $selected = ($currentNetwork == $netId) ? 'selected' : '';
+                                    echo '<option value="' . $netId . '" ' . $selected . '>' . $netName . '</option>';
+                                  }
+                                  ?>
+                                </select>
+                              </div>
+
+                              
+                              
+  
+                            <div class="form-row">
+                              <div class="col-md-6 mb-3">
+                                <label class="form-scheda-label">Note Network</label>
+                                <textarea class="form-control" id="pl_player_network_note" name="pl_player_network_note" rows="3"><?=$p[0]['pl_player_network_note'] ?? ''?></textarea>
+                              </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center">
+                                  <div class="custom-control custom-switch">
+                                    <?php 
+                                    $onlineRaw = $p[0]['pl_player_online'] ?? null;
+                                    $onlineValue = false;
+                                    if($onlineRaw !== null) {
+                                      $onlineValue = ($onlineRaw == 1 || $onlineRaw == '1' || (is_string($onlineRaw) && strtolower($onlineRaw) == 'on'));
+                                    }
+                                    ?>
+                                    <input type="checkbox" class="custom-control-input" id="pl_player_online" name="pl_player_online" value="1" <?php echo $onlineValue ? 'checked' : ''; ?>>
+                                    <label class="custom-control-label" for="pl_player_online"></label>
+                                  </div>
+                                  <span class="ml-2" style="white-space: nowrap;"><?php echo $onlineValue ? 'PLAYER ONLINE' : 'PLAYER OFFLINE'; ?></span>
+                                </div>
+                              </div>
+                              
                           </div>
                         </div>
                       </div>

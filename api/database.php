@@ -706,6 +706,14 @@ class Gruppi extends DB
         return $st->fetchAll();
     }
 
+    public static function selectAllNetworks()
+    {
+        $query = "SELECT * FROM `networks` ORDER BY `id` ASC";
+        $st = self::$db->prepare($query);
+        $st->execute();
+        return $st->fetchAll();
+    }
+    
     public static function updatePlayerSubgruppi($playerId, $subgruppiIds)
     {
         try {

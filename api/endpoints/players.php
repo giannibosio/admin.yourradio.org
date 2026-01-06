@@ -377,7 +377,13 @@ function handlePlayersRequest($method, $action, $id, $data) {
                         'pl_client_ora_off_min' => 'pl_client_ora_off_min',
                         'pl_oraOffCalcolata' => 'pl_oraOffCalcolata',
                         'pl_keyword' => 'pl_keyword',
-                        'pl_dataCreazione' => 'pl_dataCreazione'
+                        'pl_dataCreazione' => 'pl_dataCreazione',
+                        'pl_player_router_dinamico' => 'pl_player_router_dinamico',
+                        'pl_player_online' => 'pl_player_online',
+                        'pl_player_network' => 'pl_player_network',
+                        'pl_player_network_note' => 'pl_player_network_note',
+                        'port_80' => 'port_80',
+                        'port_22' => 'port_22'
                     ];
                     
                     // Se pl_keyword viene modificato, calcola pl_keyword_md5 = MD5(pl_keyword + "_" + pl_id)

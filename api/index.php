@@ -158,6 +158,11 @@ try {
             handleAuthRequest($requestMethod, $action, $id, $requestData);
             break;
             
+        case 'networks':
+            require_once __DIR__ . '/endpoints/networks.php';
+            handleNetworksRequest($requestMethod, $action, $id, $requestData);
+            break;
+            
         case 'subgruppi':
             require_once __DIR__ . '/endpoints/gruppi.php';
             // Gestione endpoint /api/subgruppi/{id}/players
