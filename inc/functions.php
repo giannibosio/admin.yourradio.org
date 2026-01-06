@@ -354,19 +354,27 @@ function createSelectForSchedaSong2($name,$nameField,$selected){
 function buildCheckSubGroupByIdPlayer($id){
     $check = '';
     
+    error_log("=== BUILD CHECK SUBGRUPPI ===");
+    error_log("Player ID: " . intval($id));
+    
     // Usa l'API invece del database locale
     $apiResponse = callApi("players/" . intval($id) . "/subgruppi");
     
+    error_log("API Response ricevuta: " . json_encode($apiResponse));
+    
     if($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
         $res = $apiResponse['data'];
+        error_log("Dati subgruppi da API: " . json_encode($res));
         foreach($res as $sg){
             $checked = (isset($sg['checked']) && $sg['checked'] == 1) ? " checked " : "";
+            error_log("Subgruppo " . $sg['sgr_id'] . " (" . $sg['sgr_nome'] . "): checked = " . ($checked ? "SI" : "NO"));
             $check.='
     <div class="custom-control custom-checkbox">
         <input type="checkbox" class="custom-control-input" id="subgruppo_'.$sg['sgr_id'].'" name="subgruppo_'.$sg['sgr_id'].'" value="1" '.$checked.'>
         <label class="custom-control-label" for="subgruppo_'.$sg['sgr_id'].'">'.$sg['sgr_nome'].'-'.$sg['sgr_id'].'</label>
     </div>';
         }
+        error_log("=== FINE BUILD CHECK SUBGRUPPI ===");
     } else {
         // Fallback: prova a usare il database locale se disponibile (solo per compatibilità)
         if(class_exists('Gruppi') && method_exists('Gruppi', 'selectSubGruppoByIdPlayer')) {

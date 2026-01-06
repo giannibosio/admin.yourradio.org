@@ -36,21 +36,31 @@ function handlePlayersRequest($method, $action, $id, $data) {
                 sendSuccessResponse($player[0]);
             } elseif ($id !== null && $action === 'subgruppi') {
                 // Lista subgruppi del player con stato checked
+                error_log("=== GET PLAYER SUBGRUPPI ===");
+                error_log("Player ID richiesto: " . $id);
+                
                 $player = Player::selectPlayerByID($id);
                 if (empty($player)) {
                     sendErrorResponse("Player non trovato", 404);
                 }
+                
                 $subgruppi = Gruppi::selectSubGruppoByIdPlayer($id);
+                error_log("Subgruppi disponibili per il gruppo del player: " . json_encode($subgruppi));
+                
                 $result = [];
                 foreach ($subgruppi as $sg) {
                     $getCheck = Gruppi::getCheckRelatedSubGruppoByIdPlayer($id, $sg['sgr_id']);
+                    error_log("Verifica relazione player " . $id . " - subgruppo " . $sg['sgr_id'] . ": " . json_encode($getCheck));
                     $checked = (!empty($getCheck) && isset($getCheck[0]['checked']) && $getCheck[0]['checked'] == 1) ? 1 : 0;
+                    error_log("Subgruppo " . $sg['sgr_id'] . " (" . $sg['sgr_nome'] . "): checked = " . $checked);
                     $result[] = [
                         'sgr_id' => (int)$sg['sgr_id'],
                         'sgr_nome' => $sg['sgr_nome'],
                         'checked' => $checked
                     ];
                 }
+                error_log("Risultato finale: " . json_encode($result));
+                error_log("=== FINE GET PLAYER SUBGRUPPI ===");
                 sendSuccessResponse($result);
             } elseif ($id !== null && $action === 'password') {
                 // Cambia password del player (in chiaro)
@@ -451,6 +461,32 @@ function handlePlayersRequest($method, $action, $id, $data) {
                 } catch (Exception $e) {
                     error_log("Errore nell'aggiornamento player: " . $e->getMessage());
                     sendErrorResponse("Errore nell'aggiornamento del player: " . $e->getMessage(), 500);
+                }
+            } elseif ($id !== null && $action === 'subgruppi') {
+                // Aggiorna sottogruppi del player
+                try {
+                    $playerId = intval($id);
+                    
+                    // Verifica che il player esista
+                    $player = Player::selectPlayerByID($playerId);
+                    if (empty($player)) {
+                        sendErrorResponse("Player non trovato", 404);
+                    }
+                    
+                    // Verifica che subgruppi sia un array
+                    if (!isset($data['subgruppi']) || !is_array($data['subgruppi'])) {
+                        sendErrorResponse("subgruppi deve essere un array", 400);
+                    }
+                    
+                    // Aggiorna le relazioni player-subgruppo
+                    Gruppi::updatePlayerSubgruppi($playerId, $data['subgruppi']);
+                    
+                    error_log("UPDATE PLAYER SUBGRUPPI: Player ID " . $playerId . " - Sottogruppi: " . json_encode($data['subgruppi']));
+                    
+                    sendSuccessResponse(['player_id' => $playerId, 'subgruppi' => $data['subgruppi']], "Sottogruppi aggiornati con successo");
+                } catch (Exception $e) {
+                    error_log("Errore nell'aggiornamento sottogruppi player: " . $e->getMessage());
+                    sendErrorResponse("Errore nell'aggiornamento dei sottogruppi: " . $e->getMessage(), 500);
                 }
             } else {
                 sendErrorResponse("ID player richiesto", 400);

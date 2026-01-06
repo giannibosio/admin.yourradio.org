@@ -649,12 +649,16 @@ class Gruppi extends DB
     public static function getCheckRelatedSubGruppoByIdPlayer($idPlayer, $idSubGruppo)
     {
         $query = "SELECT COUNT(plsgr_sgr_id) as checked FROM `player_subgruppo` WHERE `plsgr_pl_id` = :player_id AND `plsgr_sgr_id` = :subgruppo_id";
+        error_log("QUERY CHECK RELATION: " . $query);
+        error_log("PARAMS CHECK: player_id = " . $idPlayer . ", subgruppo_id = " . $idSubGruppo);
         $st = self::$db->prepare($query);
         $st->execute([
             ':player_id' => $idPlayer,
             ':subgruppo_id' => $idSubGruppo
         ]);
-        return $st->fetchAll();
+        $result = $st->fetchAll();
+        error_log("RESULT CHECK RELATION: " . json_encode($result));
+        return $result;
     }
 
     public static function selectSubGruppoByIdPlayer($id)
@@ -663,9 +667,13 @@ class Gruppi extends DB
                   JOIN gruppi AS gr ON(sgr.sgr_gr_id=gr.gr_id) 
                   JOIN players AS pl ON(pl.pl_idGruppo=gr.gr_id)
                   WHERE pl.pl_id = :id";
+        error_log("QUERY SELECT SUBGRUPPI BY PLAYER: " . $query);
+        error_log("PARAMS SELECT: id = " . $id);
         $st = self::$db->prepare($query);
         $st->execute([':id' => $id]);
-        return $st->fetchAll();
+        $result = $st->fetchAll();
+        error_log("RESULT SELECT SUBGRUPPI: " . json_encode($result));
+        return $result;
     }
 
     public static function selectSubGruppoById($id)
@@ -696,6 +704,68 @@ class Gruppi extends DB
         $st = self::$db->prepare($query);
         $st->execute([':id' => $id]);
         return $st->fetchAll();
+    }
+
+    public static function updatePlayerSubgruppi($playerId, $subgruppiIds)
+    {
+        try {
+            error_log("=== UPDATE PLAYER SUBGRUPPI ===");
+            error_log("Player ID: " . $playerId);
+            error_log("Subgruppi IDs ricevuti: " . json_encode($subgruppiIds));
+            
+            // Prima elimina tutte le relazioni esistenti per questo player
+            $deleteQuery = "DELETE FROM `player_subgruppo` WHERE `plsgr_pl_id` = :player_id";
+            error_log("QUERY DELETE: " . $deleteQuery);
+            error_log("PARAMS DELETE: player_id = " . $playerId);
+            $deleteSt = self::$db->prepare($deleteQuery);
+            $deleteResult = $deleteSt->execute([':player_id' => $playerId]);
+            $rowsDeleted = $deleteSt->rowCount();
+            error_log("DELETE RESULT: rows deleted = " . $rowsDeleted);
+            
+            // Poi inserisci le nuove relazioni
+            if (!empty($subgruppiIds) && is_array($subgruppiIds)) {
+                $insertQuery = "INSERT INTO `player_subgruppo` (`plsgr_pl_id`, `plsgr_sgr_id`) VALUES (:player_id, :subgruppo_id)";
+                error_log("QUERY INSERT: " . $insertQuery);
+                $insertSt = self::$db->prepare($insertQuery);
+                
+                $insertedCount = 0;
+                foreach ($subgruppiIds as $sgrId) {
+                    $sgrId = intval($sgrId);
+                    if ($sgrId > 0) {
+                        $insertParams = [
+                            ':player_id' => $playerId,
+                            ':subgruppo_id' => $sgrId
+                        ];
+                        error_log("INSERT PARAMS: player_id = " . $playerId . ", subgruppo_id = " . $sgrId);
+                        $insertResult = $insertSt->execute($insertParams);
+                        if ($insertResult) {
+                            $insertedCount++;
+                            error_log("INSERT SUCCESS per subgruppo " . $sgrId);
+                        } else {
+                            $errorInfo = $insertSt->errorInfo();
+                            error_log("INSERT ERROR per subgruppo " . $sgrId . ": " . json_encode($errorInfo));
+                        }
+                    }
+                }
+                error_log("INSERT RESULT: " . $insertedCount . " relazioni inserite");
+            } else {
+                error_log("Nessun subgruppo da inserire (array vuoto o non valido)");
+            }
+            
+            // Verifica finale: leggi le relazioni salvate
+            $verifyQuery = "SELECT `plsgr_pl_id`, `plsgr_sgr_id` FROM `player_subgruppo` WHERE `plsgr_pl_id` = :player_id";
+            $verifySt = self::$db->prepare($verifyQuery);
+            $verifySt->execute([':player_id' => $playerId]);
+            $savedRelations = $verifySt->fetchAll();
+            error_log("VERIFICA FINALE - Relazioni salvate nel DB: " . json_encode($savedRelations));
+            error_log("=== FINE UPDATE PLAYER SUBGRUPPI ===");
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Errore in updatePlayerSubgruppi: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            throw $e;
+        }
     }
 
     public static function selectAllPlayersGruppoById($id)

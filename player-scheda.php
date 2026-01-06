@@ -618,6 +618,56 @@ $(document).ready(function() {
     e.preventDefault();
     console.log("Intercettato submit form per update");
     
+    // Funzione per salvare i sottogruppi del player
+    function savePlayerSubgruppi(playerId) {
+      if(!playerId || playerId === "" || playerId === "nuova" || playerId === "0") {
+        console.log("Salvataggio sottogruppi saltato: playerId non valido");
+        return;
+      }
+      
+      // Raccogli tutti i sottogruppi selezionati
+      var selectedSubgruppi = [];
+      console.log("=== RACCOLTA SOTTOGRUPPI ===");
+      console.log("Player ID:", playerId);
+      
+      // Conta tutti i checkbox dei sottogruppi (selezionati e non)
+      var allSubgruppi = $("input[name^=\'subgruppo_\']");
+      console.log("Totale checkbox sottogruppi trovati:", allSubgruppi.length);
+      
+      allSubgruppi.each(function() {
+        var $checkbox = $(this);
+        var name = $checkbox.attr("name");
+        var sgrId = name.replace("subgruppo_", "");
+        var isChecked = $checkbox.is(":checked");
+        console.log("Checkbox:", name, "| ID:", sgrId, "| Checked:", isChecked);
+        
+        if(isChecked && sgrId && parseInt(sgrId) > 0) {
+          selectedSubgruppi.push(parseInt(sgrId));
+        }
+      });
+      
+      console.log("Sottogruppi selezionati (array finale):", selectedSubgruppi);
+      console.log("=== FINE RACCOLTA SOTTOGRUPPI ===");
+      
+      var isLocalhostSubgruppi = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      var apiUrlSubgruppi = "https://yourradio.org/api/players/" + playerId + "/subgruppi";
+      var proxyPathSubgruppi = \'./api-proxy.php\';
+      var finalUrlSubgruppi = isLocalhostSubgruppi ? proxyPathSubgruppi + "?url=" + encodeURIComponent(apiUrlSubgruppi) : apiUrlSubgruppi;
+      
+      $.ajax({
+        method: "PUT",
+        url: finalUrlSubgruppi,
+        contentType: "application/json",
+        data: JSON.stringify({subgruppi: selectedSubgruppi}),
+        success: function(res) {
+          console.log("API RESPONSE - Update Subgruppi SUCCESS:", res);
+        },
+        error: function(xhr, status, error) {
+          console.error("API RESPONSE - Update Subgruppi ERROR:", {xhr: xhr, status: status, error: error});
+        }
+      });
+    }
+    
     var formData = {};
     var $form = $(this);
     
@@ -750,6 +800,9 @@ $(document).ready(function() {
         console.log("  Server: https://yourradio.org");
         console.log("  Response:", res);
         if(res.success) {
+          // Determina l ID del player (nuovo o esistente)
+          var currentPlayerId = isNewPlayer && res.data && res.data.pl_id ? res.data.pl_id : playerId;
+          
           if(isNewPlayer && res.data && res.data.pl_id) {
             // Nuovo player creato, aggiorna pl_keyword con l\'ID reale
             var newPlayerId = res.data.pl_id;
@@ -766,11 +819,18 @@ $(document).ready(function() {
                   if(updateRes.success) {
                     console.log("pl_keyword aggiornato:", plKeyword);
                   }
+                  // Dopo aver aggiornato pl_keyword, salva i sottogruppi
+                  savePlayerSubgruppi(currentPlayerId);
                 },
                 error: function() {
                   console.error("Errore nell\'aggiornamento di pl_keyword");
+                  // Salva comunque i sottogruppi anche in caso di errore
+                  savePlayerSubgruppi(currentPlayerId);
                 }
               });
+            } else {
+              // Se non c\'è password, salva direttamente i sottogruppi
+              savePlayerSubgruppi(currentPlayerId);
             }
             // Reindirizza alla scheda del player con l\'ID reale
             showMessageModal("Successo", "Player creato con successo!", "success");
@@ -778,6 +838,8 @@ $(document).ready(function() {
               window.location.href = "player-scheda.php?id=" + newPlayerId;
             }, 1500);
           } else {
+            // Player esistente aggiornato, salva i sottogruppi
+            savePlayerSubgruppi(currentPlayerId);
             showMessageModal("Successo", "Player aggiornato con successo!", "success");
             setTimeout(function() {
               window.location.reload();
