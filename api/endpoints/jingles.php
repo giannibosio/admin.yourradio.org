@@ -4,6 +4,7 @@
  * GET    /api/jingles              - Lista jingles (richiede gruppo_id)
  * GET    /api/jingles/{id}         - Dettaglio jingle
  * POST   /api/jingles              - Crea nuovo jingle
+ * POST   /api/jingles/{id}/upload  - Carica file audio per un jingle
  * PUT    /api/jingles/{id}         - Aggiorna jingle
  */
 
@@ -62,9 +63,117 @@ function handleJinglesRequest($method, $action, $id, $data) {
             }
             break;
             
+            
         case 'POST':
-            // Crea nuovo jingle
-            if ($id === null && $action === '') {
+            // Upload file jingle
+            if ($id !== null && $action === 'upload') {
+                // Carica file audio
+                if (!isset($_FILES['file'])) {
+                    sendErrorResponse("Nessun file ricevuto", 400);
+                }
+                
+                if ($_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                    $errorMessages = array(
+                        UPLOAD_ERR_INI_SIZE => 'Il file supera la dimensione massima consentita',
+                        UPLOAD_ERR_FORM_SIZE => 'Il file supera la dimensione massima del form',
+                        UPLOAD_ERR_PARTIAL => 'Il file è stato caricato solo parzialmente',
+                        UPLOAD_ERR_NO_FILE => 'Nessun file è stato caricato',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Directory temporanea mancante',
+                        UPLOAD_ERR_CANT_WRITE => 'Impossibile scrivere il file su disco',
+                        UPLOAD_ERR_EXTENSION => 'Un\'estensione PHP ha bloccato il caricamento del file'
+                    );
+                    $errorMsg = isset($errorMessages[$_FILES['file']['error']]) 
+                        ? $errorMessages[$_FILES['file']['error']] 
+                        : 'Errore sconosciuto nel caricamento: ' . $_FILES['file']['error'];
+                    sendErrorResponse($errorMsg, 400);
+                }
+                
+                $file = $_FILES['file'];
+                $filename = $file['name'];
+                $tmpPath = $file['tmp_name'];
+                
+                // Verifica che il file temporaneo esista
+                if (!file_exists($tmpPath)) {
+                    sendErrorResponse("File temporaneo non trovato: " . $tmpPath, 400);
+                }
+                
+                // Verifica che il jingle esista e recupera il nome del gruppo
+                $jingle = Jingles::selectJingleById($id);
+                if (empty($jingle)) {
+                    sendErrorResponse("Jingle non trovato", 404);
+                }
+                $j = $jingle[0];
+                $gruppoNome = isset($j['gr_nome']) ? $j['gr_nome'] : '';
+                
+                if (empty($gruppoNome)) {
+                    sendErrorResponse("Nome gruppo non trovato per il jingle", 400);
+                }
+                
+                // Genera un nome file basato sull'ID del jingle (formato 4 cifre)
+                $fileExtension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                if ($fileExtension !== 'mp3') {
+                    sendErrorResponse("Il file deve essere in formato MP3 (ricevuto: " . $fileExtension . ")", 400);
+                }
+                
+                $jingleIdFormatted = str_pad($id, 4, '0', STR_PAD_LEFT);
+                $newFilename = $jingleIdFormatted . '.mp3';
+                
+                // Percorso di destinazione: /player/[nome del gruppo minuscolo]/jingle/[nomefile]
+                $gruppoNomeLower = strtolower(preg_replace('/\s+/', '', $gruppoNome));
+                $remotePath = $_SERVER['DOCUMENT_ROOT'] . '/player/' . $gruppoNomeLower . '/jingle/' . $newFilename;
+                $remoteDir = dirname($remotePath);
+                
+                // Crea la directory se non esiste
+                if (!is_dir($remoteDir)) {
+                    if (!mkdir($remoteDir, 0755, true)) {
+                        sendErrorResponse("Impossibile creare la directory di destinazione: " . $remoteDir, 500);
+                    }
+                }
+                
+                // Verifica che la directory sia scrivibile
+                if (!is_writable($remoteDir)) {
+                    sendErrorResponse("La directory di destinazione non è scrivibile: " . $remoteDir, 500);
+                }
+                
+                // Sposta il file caricato nella directory di destinazione
+                if (!move_uploaded_file($tmpPath, $remotePath)) {
+                    $lastError = error_get_last();
+                    $errorMsg = "Errore nel salvataggio del file sul server";
+                    if ($lastError) {
+                        $errorMsg .= ": " . $lastError['message'];
+                    }
+                    sendErrorResponse($errorMsg . " (da: " . $tmpPath . " a: " . $remotePath . ")", 500);
+                }
+                
+                // Verifica che il file sia stato spostato correttamente
+                if (!file_exists($remotePath)) {
+                    sendErrorResponse("Il file non è stato salvato correttamente: " . $remotePath, 500);
+                }
+                
+                // Aggiorna il database con il nome del file
+                try {
+                    $updateQuery = "UPDATE `jingle` SET `jingle_file` = :filename WHERE `jingle_id` = :id";
+                    $updateSt = DB::$db->prepare($updateQuery);
+                    $result = $updateSt->execute(array(
+                        ':filename' => $newFilename,
+                        ':id' => $id
+                    ));
+                    
+                    if (!$result) {
+                        $errorInfo = $updateSt->errorInfo();
+                        sendErrorResponse("Errore nell'aggiornamento del database: " . $errorInfo[2], 500);
+                    }
+                } catch (Exception $e) {
+                    sendErrorResponse("Eccezione durante l'aggiornamento del database: " . $e->getMessage(), 500);
+                }
+                
+                sendSuccessResponse(array(
+                    'filename' => $newFilename,
+                    'path' => '/player/' . $gruppoNomeLower . '/jingle/' . $newFilename,
+                    'size' => $file['size']
+                ), "File caricato con successo");
+            } elseif ($id === null && $action === '') {
+                // Crea nuovo jingle (codice esistente)
                 try {
                     if (!isset($data['jingle_nome']) || empty($data['jingle_nome'])) {
                         sendErrorResponse("jingle_nome richiesto", 400);

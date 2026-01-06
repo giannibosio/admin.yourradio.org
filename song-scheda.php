@@ -360,12 +360,38 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
                 <input type="file" id="nameFileInput" name="nameFileInput" class="form-control-file">
               </div>
             </div>
+            <div id="uploadSpinner" style="display: none; text-align: center; padding: 20px;">
+              <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Caricamento in corso...</span>
+              </div>
+              <p class="mt-2">Caricamento file in corso...</p>
+            </div>
           
             <div class="modal-footer">
-              <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-              <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal" id="uploadFile">Carica File</button>
+              <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal" id="uploadCancelBtn">Annulla</button>
+              <button type="button" class="btn mb-2 btn-primary" id="uploadFile">Carica File</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Messaggi -->
+  <div class="modal fade" id="messageModal" tabindex="-1" role="dialog" aria-labelledby="messageModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header" id="messageModalHeader">
+          <h5 class="modal-title" id="messageModalTitle">Messaggio</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body" id="messageModalBody">
+          <p id="messageModalText"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal">OK</button>
         </div>
       </div>
     </div>
@@ -376,7 +402,43 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
 </div> <!-- /.card-body -->
 
 <script>
+// Carica jQuery se non è disponibile (utile quando la pagina viene caricata dinamicamente)
+if (typeof jQuery === 'undefined') {
+  console.log("[song-scheda] jQuery non disponibile, carico dinamicamente...");
+  var script = document.createElement('script');
+  script.src = 'js/jquery.min.js';
+  script.onload = function() {
+    console.log("[song-scheda] jQuery caricato dinamicamente");
+    initSongSchedaScripts();
+  };
+  script.onerror = function() {
+    console.error("[song-scheda] Errore nel caricamento di jQuery");
+    // Fallback: aspetta che venga caricato dalla pagina parent o dal footer
+    var checkJQuery = setInterval(function() {
+      if (typeof jQuery !== 'undefined') {
+        clearInterval(checkJQuery);
+        console.log("[song-scheda] jQuery ora disponibile (da pagina parent/footer)");
+        initSongSchedaScripts();
+      }
+    }, 50);
+    
+    // Timeout di sicurezza dopo 5 secondi
+    setTimeout(function() {
+      clearInterval(checkJQuery);
+      if (typeof jQuery !== 'undefined') {
+        initSongSchedaScripts();
+      } else {
+        console.error("[song-scheda] jQuery non disponibile dopo 5 secondi");
+      }
+    }, 5000);
+  };
+  document.head.appendChild(script);
+} else {
+  console.log("[song-scheda] jQuery già disponibile");
+  initSongSchedaScripts();
+}
 
+function initSongSchedaScripts() {
 // Definisci immediatamente loadFormats come funzione globale per essere disponibile quando la pagina viene caricata dinamicamente
 window.loadFormats = function() {
   console.log("[loadFormats] Funzione chiamata");
@@ -515,6 +577,36 @@ $(document).on("click", "#closeAudioPlayer", function() {
   $("#form-row-audio-player").fadeOut("fast");
 });
 
+  // Funzione per mostrare modale messaggi
+  function showMessageModal(title, message, type) {
+    type = type || "info"; // success, error, warning, info
+    var $modal = $("#messageModal");
+    var $header = $("#messageModalHeader");
+    var $title = $("#messageModalTitle");
+    var $text = $("#messageModalText");
+    
+    // Rimuovi tutte le classi di colore precedenti
+    $header.removeClass("bg-success bg-danger bg-warning bg-info");
+    
+    // Imposta il colore in base al tipo
+    if(type === "success") {
+      $header.addClass("bg-success text-white");
+      $title.html("<span class=\"fe fe-check-circle fe-16 mr-2\"></span>" + title);
+    } else if(type === "error") {
+      $header.addClass("bg-danger text-white");
+      $title.html("<span class=\"fe fe-alert-circle fe-16 mr-2\"></span>" + title);
+    } else if(type === "warning") {
+      $header.addClass("bg-warning text-white");
+      $title.html("<span class=\"fe fe-alert-triangle fe-16 mr-2\"></span>" + title);
+    } else {
+      $header.addClass("bg-info text-white");
+      $title.html("<span class=\"fe fe-info fe-16 mr-2\"></span>" + title);
+    }
+    
+    $text.text(message);
+    $modal.modal("show");
+  }
+
 $(document).on("click", "#uploadFile", function (e) {
     e.preventDefault();
     // Leggi l'ID dal campo del form o dall'URL
@@ -528,21 +620,24 @@ $(document).on("click", "#uploadFile", function (e) {
     }
     
     if (!songId || songId === '' || songId === 'nuova') {
-      alert("Devi prima salvare la song prima di caricare il file!");
+      showMessageModal("Errore", "Devi prima salvare la song prima di caricare il file!", "error");
       return false;
     }
     
     var fileInput = $('#nameFileInput')[0];
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-      alert("Seleziona un file da caricare!");
+      showMessageModal("Errore", "Seleziona un file da caricare!", "error");
       return false;
     }
     
     var fdata = new FormData();
     fdata.append('file', fileInput.files[0]);
     
-    // Disabilita il bottone durante il caricamento
+    // Mostra lo spinner e disabilita i bottoni
+    $("#uploadSpinner").show();
     $("#uploadFile").prop("disabled", true).text("Caricamento...");
+    $("#uploadCancelBtn").prop("disabled", true);
+    $("#nameFileInput").prop("disabled", true);
     
     $.ajax({
         url: "https://yourradio.org/api/songs/" + songId + "/upload",
@@ -552,6 +647,9 @@ $(document).on("click", "#uploadFile", function (e) {
         contentType: false,
         success: function (response, status, jqxhr) {
           console.log("[uploadFile] Risposta:", response);
+          // Nascondi lo spinner
+          $("#uploadSpinner").hide();
+          
           if(response.success) {
             // Aggiorna il campo sg_file nel form
             if(response.data && response.data.filename) {
@@ -559,19 +657,25 @@ $(document).on("click", "#uploadFile", function (e) {
               $("#sg_file").val(filename);
             }
             // Mostra il bottone download e nascondi l'alert
-          $("#downloadFile").css("display","");
-          $("#form-row-alert-file").css("display","none");
-            // Chiudi il modal
+            $("#downloadFile").css("display","");
+            $("#form-row-alert-file").css("display","none");
+            // Chiudi il modal upload
             $("#uploadModal").modal("hide");
-            alert("File caricato con successo!");
+            // Mostra modale di successo
+            showMessageModal("Successo", "File caricato con successo!", "success");
           } else {
-            alert("Errore: " + (response.message || "Errore sconosciuto"));
+            showMessageModal("Errore", response.message || "Errore sconosciuto", "error");
           }
-          // Riabilita il bottone
+          // Riabilita i controlli
           $("#uploadFile").prop("disabled", false).text("Carica File");
+          $("#uploadCancelBtn").prop("disabled", false);
+          $("#nameFileInput").prop("disabled", false);
         },
         error: function (jqxhr, status, errorMessage) {
           console.error("[uploadFile] Errore:", errorMessage, jqxhr);
+          // Nascondi lo spinner
+          $("#uploadSpinner").hide();
+          
           var errorMsg = "Errore durante il caricamento del file.";
           if (jqxhr.responseJSON && jqxhr.responseJSON.error && jqxhr.responseJSON.error.message) {
             errorMsg = jqxhr.responseJSON.error.message;
@@ -586,14 +690,27 @@ $(document).on("click", "#uploadFile", function (e) {
               errorMsg = jqxhr.responseText || errorMessage;
             }
           }
-          alert("Errore: " + errorMsg);
-          // Riabilita il bottone
+          // Chiudi il modal upload
+          $("#uploadModal").modal("hide");
+          // Mostra modale di errore
+          showMessageModal("Errore", errorMsg, "error");
+          // Riabilita i controlli
           $("#uploadFile").prop("disabled", false).text("Carica File");
+          $("#uploadCancelBtn").prop("disabled", false);
+          $("#nameFileInput").prop("disabled", false);
         }
     });
     
     return false;
-});
+  });
+  
+  // Reset del modale quando viene chiuso
+  $("#uploadModal").on("hidden.bs.modal", function () {
+    $("#uploadSpinner").hide();
+    $("#uploadFile").prop("disabled", false).text("Carica File");
+    $("#uploadCancelBtn").prop("disabled", false);
+    $("#nameFileInput").prop("disabled", false).val("");
+  });
   
   $(document).on("click", ".chiudiSchedaSong", function(){
     // Ferma l'audio quando si esce dalla pagina
@@ -1018,9 +1135,66 @@ $(document).on("click", "#uploadFile", function (e) {
               // Mostra i pulsanti CANCELLA e UPLOAD ora che abbiamo un ID valido
               $("#btnDelete").show();
               $("#btnUpload").show();
-              // Aggiorna l'URL e ricarica la pagina con il nuovo ID per mostrare tutti i dati
-              window.location.href = "song-scheda.php?id=" + newId + "&t=" + new Date().getTime();
-              return; // Esci dalla funzione perché la pagina verrà ricaricata
+              
+              // Aggiorna l'URL senza ricaricare la pagina
+              var newUrl = "song-scheda.php?id=" + newId + "&t=" + new Date().getTime();
+              if (window.history && window.history.pushState) {
+                window.history.pushState({path: newUrl}, '', newUrl);
+              }
+              
+              // Ricarica i dati della song dall'API per mostrare tutti i dati aggiornati
+              console.log("[updateSong] Ricarico i dati della song dall'API...");
+              $.ajax({
+                url: "https://yourradio.org/api/songs/" + newId + "?t=" + new Date().getTime(),
+                method: "GET",
+                dataType: "json",
+                cache: false,
+                success: function(songResponse) {
+                  console.log("[updateSong] Dati ricaricati:", songResponse);
+                  if(songResponse.success && songResponse.data) {
+                    var data = songResponse.data;
+                    // Aggiorna tutti i campi del form con i dati ricaricati
+                    if(data.sg_artista !== undefined) $("#sg_artista").val(data.sg_artista);
+                    if(data.sg_titolo !== undefined) $("#sg_titolo").val(data.sg_titolo);
+                    if(data.sg_anno !== undefined) $("#sg_anno").val(data.sg_anno);
+                    if(data.sg_artista2 !== undefined) $("#sg_artista2").val(data.sg_artista2);
+                    if(data.sg_artista3 !== undefined) $("#sg_artista3").val(data.sg_artista3);
+                    if(data.sg_diritti !== undefined) $("#sg_diritti").val(data.sg_diritti);
+                    if(data.sg_autori !== undefined) $("#sg_autori").val(data.sg_autori);
+                    if(data.sg_casaDiscografica !== undefined) $("#sg_casaDiscografica").val(data.sg_casaDiscografica);
+                    if(data.sg_etichetta !== undefined) $("#sg_etichetta").val(data.sg_etichetta);
+                    if(data.sg_umoreId !== undefined) $("#sg_umoreId").val(data.sg_umoreId);
+                    if(data.sg_nazione !== undefined) $("#sg_nazione").val(data.sg_nazione);
+                    if(data.sg_attivo !== undefined) {
+                      if(data.sg_attivo == 1) {
+                        $("#sg_attivo").prop("checked", true);
+                      } else {
+                        $("#sg_attivo").prop("checked", false);
+                      }
+                    }
+                    // Aggiorna anche i format se presenti
+                    if(data.formats && Array.isArray(data.formats)) {
+                      $("#formats_select option").each(function() {
+                        var optionId = parseInt($(this).val());
+                        if (data.formats.indexOf(optionId) !== -1) {
+                          $(this).prop("selected", true);
+                        } else {
+                          $(this).prop("selected", false);
+                        }
+                      });
+                      updateFormats();
+                    }
+                    console.log("[updateSong] Form aggiornato con i dati ricaricati");
+                  }
+                },
+                error: function(xhr, status, error) {
+                  console.error("[updateSong] Errore nel ricaricamento dati:", error);
+                }
+              });
+              
+              // Chiudi il modal dopo il successo
+              $("#updateModal").modal("hide");
+              return; // Esci dalla funzione
             }
           }
           
@@ -1120,7 +1294,7 @@ $(document).on("click", "#uploadFile", function (e) {
       console.warn("[song-scheda] Bottone updateSong NON trovato al document ready");
     }
   });
-  
+} // Fine di initSongSchedaScripts
 
 
 </script>

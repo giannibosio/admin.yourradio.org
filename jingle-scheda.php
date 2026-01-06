@@ -170,6 +170,7 @@ if($active==1){
                   <button type="button" title="SALVA" class="btn btn-outline-danger" id="btnSave"><span class="fe fe-save fe-16"></span></button>
                   
                   <?php if($id !== 'nuova' && !empty($id)): ?>
+                  <button title="UPLOAD" type="button" class="btn btn-outline-danger" id="btnUpload" data-toggle="modal" data-target="#uploadModal"><span class="fe fe-upload fe-16"></span></button>
                   <button title="PLAY file" type="button" class="btn btn-outline-danger" id="playFile"><span class="fe fe-play fe-16"></span></button>
                   <?php endif; ?>
                 </div>
@@ -443,6 +444,78 @@ $(document).ready(function() {
       }
     });
   });
+  
+  // Gestione upload file
+  $(document).on("click", "#uploadFile", function (e) {
+    e.preventDefault();
+    var jingleId = $("#jingle_id").val();
+    if (!jingleId || jingleId === '' || jingleId === 'nuova' || jingleId === '0') {
+      alert("Devi prima salvare il jingle prima di caricare il file!");
+      return false;
+    }
+    
+    var fileInput = $('#nameFileInput')[0];
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      alert("Seleziona un file da caricare!");
+      return false;
+    }
+    
+    var fdata = new FormData();
+    fdata.append('file', fileInput.files[0]);
+    
+    // Disabilita il bottone durante il caricamento
+    $("#uploadFile").prop("disabled", true).text("Caricamento...");
+    
+    var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    var apiUrl = "https://yourradio.org/api/jingles/" + jingleId + "/upload";
+    var proxyPath = './api-proxy.php';
+    var finalUrl = isLocalhost ? proxyPath + "?url=" + encodeURIComponent(apiUrl) : apiUrl;
+    
+    $.ajax({
+      url: finalUrl,
+      type: "POST",
+      data: fdata,
+      processData: false,
+      contentType: false,
+      success: function (response, status, jqxhr) {
+        console.log("[uploadFile] Risposta:", response);
+        if(response.success) {
+          // Chiudi il modal
+          $("#uploadModal").modal("hide");
+          showMessageModal("Successo", "File caricato con successo!", "success");
+          // Ricarica la pagina per aggiornare i dati
+          setTimeout(function() {
+            window.location.reload();
+          }, 1500);
+        } else {
+          showMessageModal("Errore", response.message || "Errore sconosciuto", "error");
+        }
+        // Riabilita il bottone
+        $("#uploadFile").prop("disabled", false).text("Carica File");
+      },
+      error: function (jqxhr, status, errorMessage) {
+        console.error("[uploadFile] Errore:", errorMessage, jqxhr);
+        var errorMsg = "Errore durante il caricamento del file.";
+        if (jqxhr.responseJSON && jqxhr.responseJSON.error && jqxhr.responseJSON.error.message) {
+          errorMsg = jqxhr.responseJSON.error.message;
+        } else if (jqxhr.responseText) {
+          try {
+            var errorData = JSON.parse(jqxhr.responseText);
+            if (errorData.error && errorData.error.message) {
+              errorMsg = errorData.error.message;
+            }
+          } catch (e) {
+            errorMsg = jqxhr.responseText || errorMessage;
+          }
+        }
+        showMessageModal("Errore", errorMsg, "error");
+        // Riabilita il bottone
+        $("#uploadFile").prop("disabled", false).text("Carica File");
+      }
+    });
+    
+    return false;
+  });
 });
 </script>
 
@@ -461,6 +534,34 @@ $(document).ready(function() {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Upload -->
+<div class="modal fade" id="uploadModal" tabindex="-1" role="dialog" aria-labelledby="uploadModalLabel" style="display: none;" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="uploadModalLabel">Upload File</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="uploadFileForm" enctype="multipart/form-data">
+          <div class="form-group">
+            <div class="custom-file">
+              <input type="file" id="nameFileInput" name="nameFileInput" class="form-control-file" accept="audio/mp3,audio/mpeg,.mp3">
+            </div>
+          </div>
+        
+          <div class="modal-footer">
+            <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
+            <button type="button" class="btn mb-2 btn-primary" id="uploadFile">Carica File</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

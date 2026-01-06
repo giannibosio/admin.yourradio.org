@@ -18,6 +18,9 @@ $url = isset($_GET['url']) ? $_GET['url'] : '';
 
 // Log della richiesta proxy
 error_log("PROXY REQUEST: " . date('Y-m-d H:i:s') . " | URL: " . $url . " | Method: " . $_SERVER['REQUEST_METHOD']);
+if (isset($_FILES) && !empty($_FILES)) {
+    error_log("PROXY: File rilevati in richiesta: " . print_r(array_keys($_FILES), true));
+}
 
 if (empty($url)) {
     error_log("PROXY ERROR: URL mancante");
@@ -59,22 +62,101 @@ if ($method !== 'GET') {
 
 // Passa i dati se presenti
 if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
-    $data = file_get_contents('php://input');
-    if ($data) {
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+    // Verifica se è un upload di file (multipart/form-data)
+    $contentType = '';
+    $allHeaders = getallheaders();
+    if ($allHeaders) {
+        foreach ($allHeaders as $name => $value) {
+            if (strtolower($name) === 'content-type') {
+                $contentType = $value;
+                break;
+            }
+        }
+    }
+    
+    // Se è multipart/form-data, inoltriamo direttamente php://input senza processarlo
+    // Questo è necessario perché quando la richiesta arriva via AJAX, i file
+    // potrebbero non essere disponibili in $_FILES
+    if (strpos($contentType, 'multipart/form-data') !== false) {
+        error_log("PROXY: Rilevato multipart/form-data. Content-Type: " . $contentType);
+        error_log("PROXY: $_FILES presente: " . (isset($_FILES) && !empty($_FILES) ? 'yes' : 'no'));
+        
+        // Leggi direttamente da php://input e inoltra così com'è
+        $data = file_get_contents('php://input');
+        if ($data) {
+            error_log("PROXY: Inoltro multipart direttamente da php://input, size: " . strlen($data));
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            // Il Content-Type verrà mantenuto dagli header originali
+        } else {
+            error_log("PROXY WARNING: Multipart rilevato ma nessun dato disponibile in php://input");
+        }
+    } else if (isset($_FILES) && !empty($_FILES)) {
+        // Se abbiamo file in $_FILES ma non è multipart (caso raro), usa CURLFile
+        error_log("PROXY: File trovati in $_FILES ma non multipart");
+        $postData = [];
+        
+        foreach ($_FILES as $key => $file) {
+            if (isset($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
+                error_log("PROXY: File trovato - Key: $key, Name: " . $file['name'] . ", Size: " . $file['size']);
+                $postData[$key] = new CURLFile(
+                    $file['tmp_name'],
+                    $file['type'],
+                    $file['name']
+                );
+            }
+        }
+        
+        if (isset($_POST) && !empty($_POST)) {
+            foreach ($_POST as $key => $value) {
+                if (!isset($postData[$key])) {
+                    $postData[$key] = $value;
+                }
+            }
+        }
+        
+        if (!empty($postData)) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            error_log("PROXY: Dati POST inviati con " . count($postData) . " campi");
+        }
+    } else {
+        // Gestione dati JSON o altri formati
+        $data = file_get_contents('php://input');
+        if ($data) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            // Verifica il Content-Type dall'header
+            $contentType = $contentType ?: 'application/json';
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: ' . $contentType));
+        }
     }
 }
 
 // Passa gli header
 $headers = [];
-foreach (getallheaders() as $name => $value) {
-    if (strtolower($name) !== 'host' && strtolower($name) !== 'connection') {
-        $headers[] = "$name: $value";
+$isMultipart = false;
+$allHeaders = getallheaders();
+if ($allHeaders) {
+    foreach ($allHeaders as $name => $value) {
+        $nameLower = strtolower($name);
+        if ($nameLower === 'content-type' && strpos($value, 'multipart/form-data') !== false) {
+            $isMultipart = true;
+        }
+        if ($nameLower !== 'host' && $nameLower !== 'connection') {
+            // Per multipart, manteniamo Content-Type e Content-Length originali
+            // perché stiamo inoltrando php://input direttamente
+            if ($isMultipart && $nameLower === 'content-length') {
+                // Manteniamo Content-Length per multipart
+                $headers[] = "$name: $value";
+            } else if (!$isMultipart || $nameLower !== 'content-length') {
+                // Per non-multipart, escludiamo Content-Length (curl lo calcola)
+                // Per multipart, includiamo tutto tranne host e connection
+                $headers[] = "$name: $value";
+            }
+        }
     }
 }
 if (!empty($headers)) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    error_log("PROXY: Headers passati: " . count($headers) . ($isMultipart ? " (multipart)" : ""));
 }
 
 $startTime = microtime(true);
