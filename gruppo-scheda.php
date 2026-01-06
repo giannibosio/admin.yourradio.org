@@ -291,10 +291,13 @@ $(document).ready(function() {
   // Pulsante Nuovo Player
   $("#btn-nuovo-player").on("click", function() {
     var gruppoId = __GRUPPO_ID_FOR_NEW_PLAYER__;
-    // Apri player-scheda.php senza ID per creare un nuovo player
-    // Passa l\'ID del gruppo come parametro per precompilare pl_idGruppo
+    var gruppoNome = __GRUPPO_NOME_FOR_NEW_PLAYER__;
+    // Salva i dati del gruppo in sessionStorage per la creazione del nuovo player
     if(gruppoId > 0) {
-      window.location.href = "player-scheda.php?gruppo_id=" + gruppoId;
+      sessionStorage.setItem("newPlayer_gruppoId", gruppoId);
+      sessionStorage.setItem("newPlayer_gruppoNome", gruppoNome || "");
+      // Apri player-scheda.php senza ID - la modale verrà mostrata automaticamente
+      window.location.href = "player-scheda.php";
     } else {
       window.location.href = "player-scheda.php";
     }
@@ -1343,7 +1346,9 @@ $script='
     <?php
     // Sostituisci i placeholder nei scripts
     $gruppoIdForNewPlayer = isset($_GET["id"]) ? intval($_GET["id"]) : 0;
+    $gruppoNomeForNewPlayer = isset($g[0]['gr_nome']) ? addslashes($g[0]['gr_nome']) : '';
     $scripts = str_replace('__GRUPPO_ID_FOR_NEW_PLAYER__', $gruppoIdForNewPlayer, $scripts);
+    $scripts = str_replace('__GRUPPO_NOME_FOR_NEW_PLAYER__', json_encode($gruppoNomeForNewPlayer), $scripts);
     echo $scripts;
     ?>
   </script>            

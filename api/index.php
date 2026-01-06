@@ -58,6 +58,10 @@ if ($endpoint === 'monitor' && isset($segments[1])) {
     // /api/utenti/{id}/password
     $id = $segments[1];
     $action = 'password';
+} elseif ($endpoint === 'players' && isset($segments[1]) && isset($segments[2]) && $segments[2] === 'password') {
+    // /api/players/{id}/password
+    $id = $segments[1];
+    $action = 'password';
 } elseif (isset($segments[1])) {
     // Endpoint standard: /api/{endpoint}/{id} o /api/{endpoint}/{id}/{action}
     if (is_numeric($segments[1])) {
