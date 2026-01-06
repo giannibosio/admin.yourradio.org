@@ -49,6 +49,13 @@ class Jingles extends DB
         $st->execute([':id' => $id]);
         return $st->fetchAll();
     }
+    
+    public static function selectJingleById($id){
+        $query = "SELECT j.*, g.gr_nome FROM jingle j LEFT JOIN gruppi g ON j.jingle_gr_id = g.gr_id WHERE j.jingle_id=:id";
+        $st = self::$db->prepare($query);
+        $st->execute([':id' => $id]);
+        return $st->fetchAll();
+    }
 }
 
 class Rubriche extends DB

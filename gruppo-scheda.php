@@ -399,7 +399,16 @@ $(document).ready(function() {
 
   $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(){
     var id=$(this).attr("id");
-    openSchedaOnTab("jingle-inner-scheda.php?id="+id,"tab-jingles");
+    var gruppoNome = __GRUPPO_NOME_FOR_NEW_PLAYER__ || "";
+    var gruppoId = __GRUPPO_ID_FOR_NEW_PLAYER__ || "";
+    // Salva il nome e l ID del gruppo in sessionStorage per la scheda jingle
+    if(gruppoNome) {
+      sessionStorage.setItem("jingle_gruppoNome", gruppoNome);
+    }
+    if(gruppoId) {
+      sessionStorage.setItem("jingle_gruppoId", gruppoId);
+    }
+    window.location.href = "jingle-scheda.php?id="+id;
   });
 
 });
@@ -918,6 +927,11 @@ $script='
     $("#gruppo-tab-sottogruppi").click();
     $(".tabs-scheda-gruppo ").hide();
     $(".tab-sottogruppi").fadeIn("slow");
+  }
+  if(getCookie("gruppo-tab")=="jingles"){
+    $("#gruppo-tab-jingles").click();
+    $(".tabs-scheda-gruppo ").hide();
+    $(".tab-jingles").fadeIn("slow");
   }
 
   $( "#gruppo-tab-scheda" ).click(function() {
