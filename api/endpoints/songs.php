@@ -367,10 +367,15 @@ function handleSongsRequest($method, $action, $id, $data) {
             if ($id === null) {
                 sendErrorResponse("ID song richiesto", 400);
             }
+            
+            error_log("[API DELETE SONG] Richiesta cancellazione song ID: " . $id);
+            
             $result = Songs::deleteById($id);
             if ($result) {
+                error_log("[API DELETE SONG] Song ID " . $id . " eliminata con successo");
                 sendSuccessResponse(['id' => $id], "Song eliminata con successo");
             } else {
+                error_log("[API DELETE SONG] ERRORE durante l'eliminazione della song ID: " . $id);
                 sendErrorResponse("Errore nell'eliminazione della song", 500);
             }
             break;

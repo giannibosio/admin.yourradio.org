@@ -251,10 +251,94 @@ class Songs extends DB
 
     public static function deleteById($id)
     {
-        $query = "DELETE FROM `songs` WHERE `songs`.`sg_id` = :id";
-        $st = self::$db->prepare($query);
-        $st->execute([':id' => $id]);
-        return true;
+        $songId = (int)$id;
+        $log = [];
+        $log[] = "[DELETE SONG] Inizio cancellazione song ID: " . $songId;
+
+        try {
+            // 1) Recupera info sulla song (per log e gestione file)
+            $selectQuery = "SELECT sg_id, sg_file FROM `songs` WHERE `sg_id` = :id LIMIT 1";
+            $stSelect = self::$db->prepare($selectQuery);
+            $stSelect->execute([':id' => $songId]);
+            $song = $stSelect->fetch(PDO::FETCH_ASSOC);
+
+            if (!$song) {
+                $log[] = "[DELETE SONG] ERRORE: Song ID " . $songId . " non trovata nel DB";
+                error_log(implode("\n", $log));
+                return false;
+            }
+
+            $log[] = "[DELETE SONG] Song trovata - sg_id: " . $song['sg_id'] . ", sg_file: " . ($song['sg_file'] !== null ? $song['sg_file'] : 'NULL');
+
+            // 2) Cancella tutte le relazioni format dalla tabella song_format
+            $deleteFormatsQuery = "DELETE FROM `song_format` WHERE `id_song` = :id";
+            $stFormats = self::$db->prepare($deleteFormatsQuery);
+            $stFormats->execute([':id' => $songId]);
+            $formatsDeleted = $stFormats->rowCount();
+            $log[] = "[DELETE SONG] Relazioni format cancellate dalla tabella song_format: " . $formatsDeleted;
+
+            // 3) Cancella il file fisico se esiste
+            $fileDeleted = false;
+            $filePath = null;
+            $filename = $songId . ".mp3"; // lo standard è ID.mp3, es. 25000.mp3
+
+            // Usa SONG_PATH se è stato configurato correttamente, altrimenti fallback al path specificato
+            if (defined('SONG_PATH') && SONG_PATH !== '/path/to/player/song/') {
+                $basePath = rtrim(SONG_PATH, '/');
+                $filePath = $basePath . '/' . $filename;
+                $log[] = "[DELETE SONG] SONG_PATH definito: " . SONG_PATH;
+            } else {
+                // Path reale indicato dall'utente
+                $basePath = "/var/www/vhosts/yourradio.org/httpdocs/player/song";
+                $filePath = $basePath . '/' . $filename;
+                $log[] = "[DELETE SONG] SONG_PATH non configurato, uso path hardcoded: " . $basePath;
+            }
+
+            $log[] = "[DELETE SONG] Tentativo cancellazione file: " . $filePath;
+
+            if (file_exists($filePath)) {
+                if (is_writable($filePath)) {
+                    if (@unlink($filePath)) {
+                        $fileDeleted = true;
+                        $log[] = "[DELETE SONG] File cancellato con successo: " . $filePath;
+                    } else {
+                        $log[] = "[DELETE SONG] ERRORE: unlink() fallita per file: " . $filePath;
+                    }
+                } else {
+                    $log[] = "[DELETE SONG] ERRORE: file non scrivibile: " . $filePath;
+                }
+            } else {
+                $log[] = "[DELETE SONG] File non trovato (potrebbe essere già stato cancellato): " . $filePath;
+            }
+
+            // 4) Cancella la song dalla tabella songs
+            $deleteSongQuery = "DELETE FROM `songs` WHERE `sg_id` = :id";
+            $stDelete = self::$db->prepare($deleteSongQuery);
+            $stDelete->execute([':id' => $songId]);
+            $songDeleted = $stDelete->rowCount() > 0;
+
+            if ($songDeleted) {
+                $log[] = "[DELETE SONG] Song ID " . $songId . " cancellata dalla tabella songs";
+            } else {
+                $log[] = "[DELETE SONG] ERRORE: nessuna riga cancellata dalla tabella songs per ID " . $songId;
+            }
+
+            // Riepilogo
+            $log[] = "[DELETE SONG] Riepilogo:";
+            $log[] = "  - Song ID: " . $songId;
+            $log[] = "  - Relazioni song_format cancellate: " . $formatsDeleted;
+            $log[] = "  - File cancellato: " . ($fileDeleted ? "SI" : "NO");
+            $log[] = "  - Song cancellata dal DB: " . ($songDeleted ? "SI" : "NO");
+            $log[] = "[DELETE SONG] Fine processo cancellazione song ID: " . $songId;
+
+            error_log(implode("\n", $log));
+
+            return $songDeleted;
+        } catch (Exception $e) {
+            $log[] = "[DELETE SONG] ECCEZIONE: " . $e->getMessage();
+            error_log(implode("\n", $log));
+            return false;
+        }
     }
 
     public static function selectAll($filter)

@@ -757,31 +757,83 @@ $(document).on("click", "#uploadFile", function (e) {
       }
     }
   });
-  $(document).on("click", "#deleteSong", function() {
+  // Usa off().on() per evitare registrazioni multiple del click handler
+  $(document).off("click", "#deleteSong").on("click", "#deleteSong", function() {
     var songId = $("#sg_id").val();
     if (!songId || songId === '' || songId === 'nuova') {
+      console.error("[DELETE SONG] Errore: ID song non valido");
       alert("Errore: ID song non valido");
       return;
     }
     
+    console.log("============================================");
+    console.log("[DELETE SONG] Avvio processo di cancellazione");
+    console.log("[DELETE SONG] Song ID:", songId);
+    
     $("#formAction").val("deleteSong");
+    
+    var apiUrl = 'https://yourradio.org/api/songs/' + songId;
+    console.log("[DELETE SONG] URL API:", apiUrl);
+    
     $.ajax( {
-      url: 'https://yourradio.org/api/songs/' + songId,
+      url: apiUrl,
       method: 'DELETE',
+      beforeSend: function() {
+        console.log("[DELETE SONG] Invio richiesta DELETE all'API...");
+      },
       success: function (response, status, jqxhr) {
-        console.log(response);
-        if(response.success) {
+        console.log("[DELETE SONG] Risposta API:", response);
+        console.log("[DELETE SONG] HTTP status:", jqxhr.status);
+        
+        if(response && response.success) {
+          console.log("[DELETE SONG] ✓ Song eliminata con successo lato server");
+          console.log("[DELETE SONG] ID confermato dalla risposta:", response.id || (response.data ? response.data.id : songId));
+          
           // Chiudi il modal
           $("#verticalModal").modal("hide");
+          console.log("[DELETE SONG] Modal di conferma chiuso");
+          
           // Chiudi la scheda e torna alla lista
           $(".chiudiSchedaSong").click();
+          console.log("[DELETE SONG] Scheda song chiusa, ritorno alla lista");
+
+          // Richiedi al parent (songs.php) di ricaricare la lista
+          try {
+            if (window.parent && window.parent !== window && typeof window.parent.reloadTable === "function") {
+              console.log("[DELETE SONG] Chiamo window.parent.reloadTable() per aggiornare la lista");
+              window.parent.reloadTable();
+            } else if (window.top && typeof window.top.reloadTable === "function") {
+              console.log("[DELETE SONG] Chiamo window.top.reloadTable() per aggiornare la lista");
+              window.top.reloadTable();
+            } else if (typeof reloadTable === "function") {
+              console.log("[DELETE SONG] Chiamo reloadTable() nello stesso contesto per aggiornare la lista");
+              reloadTable();
+            } else {
+              console.warn("[DELETE SONG] reloadTable non trovata in nessun contesto, la lista potrebbe non aggiornarsi automaticamente");
+            }
+          } catch (e) {
+            console.error("[DELETE SONG] Errore durante la chiamata a reloadTable:", e);
+          }
         } else {
-          alert("Errore durante la cancellazione: " + (response.error ? response.error.message : "Errore sconosciuto"));
+          var msg = (response && response.error && response.error.message) ? response.error.message : "Errore sconosciuto";
+          console.error("[DELETE SONG] ✗ Errore nella risposta API:", msg);
+          alert("Errore durante la cancellazione: " + msg);
         }
+        
+        console.log("[DELETE SONG] Fine risposta API");
+        console.log("============================================");
       },
       error: function (jqxhr, status, errorMessage) {
-        console.log("ERROR "+errorMessage);
+        console.error("[DELETE SONG] ✗ Errore nella richiesta AJAX");
+        console.error("[DELETE SONG] Status:", status);
+        console.error("[DELETE SONG] Error message:", errorMessage);
+        console.error("[DELETE SONG] HTTP status code:", jqxhr.status);
+        console.error("[DELETE SONG] Response text:", jqxhr.responseText);
+        if (jqxhr.responseJSON) {
+          console.error("[DELETE SONG] Response JSON:", jqxhr.responseJSON);
+        }
         alert("Errore durante la cancellazione: " + errorMessage);
+        console.log("============================================");
       }
     });
   });
