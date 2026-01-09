@@ -121,10 +121,10 @@ if(!empty($s) && isset($s[0])) {
 if(!isset($id) || $id==0 || $id==''){
   $disabled=" disabled ";
   $id='nuova';
-  $title='Nuovo profilo';
+  $title='Nuova Song';
 }else{
   $disabled="";
-  $title=" ".$id;
+  $title=" ".$id.".mp3";
 }
 if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_active="";$chbox_active_lab="Disattivato";}
 
@@ -1183,19 +1183,41 @@ $(document).on("click", "#uploadFile", function (e) {
             
             if (newId) {
               console.log("[updateSong] Nuova song creata con ID:", newId);
+              
+              // Aggiorna il campo nascosto con il nuovo ID
               $("#sg_id").val(newId);
+              
               // Mostra i pulsanti CANCELLA e UPLOAD ora che abbiamo un ID valido
               $("#btnDelete").show();
               $("#btnUpload").show();
-              
-              // Aggiorna l'URL senza ricaricare la pagina
+
+              // Se esiste reloadTable nel parent, aggiorna la lista in background
+              try {
+                if (window.parent && window.parent !== window && typeof window.parent.reloadTable === "function") {
+                  console.log("[updateSong] Chiamo window.parent.reloadTable() per aggiornare la lista in background");
+                  window.parent.reloadTable();
+                } else if (window.top && typeof window.top.reloadTable === "function") {
+                  console.log("[updateSong] Chiamo window.top.reloadTable() per aggiornare la lista in background");
+                  window.top.reloadTable();
+                } else if (typeof reloadTable === "function") {
+                  console.log("[updateSong] Chiamo reloadTable() nello stesso contesto per aggiornare la lista in background");
+                  reloadTable();
+                } else {
+                  console.warn("[updateSong] reloadTable non trovata (lista non aggiornata automaticamente)");
+                }
+              } catch (e) {
+                console.error("[updateSong] Errore nella chiamata a reloadTable:", e);
+              }
+
+              // Aggiorna l'URL senza ricaricare la pagina (per mantenere la struttura HTML)
               var newUrl = "song-scheda.php?id=" + newId + "&t=" + new Date().getTime();
               if (window.history && window.history.pushState) {
                 window.history.pushState({path: newUrl}, '', newUrl);
+                console.log("[updateSong] URL aggiornato con history.pushState:", newUrl);
               }
-              
-              // Ricarica i dati della song dall'API per mostrare tutti i dati aggiornati
-              console.log("[updateSong] Ricarico i dati della song dall'API...");
+
+              // Ricarica i dati della song dall'API per aggiornare il form e il titolo
+              console.log("[updateSong] Ricarico i dati della song dall'API per aggiornare il form...");
               $.ajax({
                 url: "https://yourradio.org/api/songs/" + newId + "?t=" + new Date().getTime(),
                 method: "GET",
@@ -1205,6 +1227,17 @@ $(document).on("click", "#uploadFile", function (e) {
                   console.log("[updateSong] Dati ricaricati:", songResponse);
                   if(songResponse.success && songResponse.data) {
                     var data = songResponse.data;
+                    
+                    // Aggiorna il titolo della pagina con l'ID
+                    var pageTitle = " " + data.sg_id + ".mp3";
+                    // Aggiorna il titolo nella pagina parent (songs.php) se siamo in un iframe/contenitore
+                    if (window.parent && window.parent.$) {
+                      window.parent.$(".page-title").html('<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span>' + pageTitle + '</span>');
+                    } else {
+                      $(".page-title").html('<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span>' + pageTitle + '</span>');
+                    }
+                    document.title = pageTitle;
+                    
                     // Aggiorna tutti i campi del form con i dati ricaricati
                     if(data.sg_artista !== undefined) $("#sg_artista").val(data.sg_artista);
                     if(data.sg_titolo !== undefined) $("#sg_titolo").val(data.sg_titolo);
@@ -1238,14 +1271,37 @@ $(document).on("click", "#uploadFile", function (e) {
                     }
                     console.log("[updateSong] Form aggiornato con i dati ricaricati");
                   }
+                  
+                  // Mostra modale informativa DOPO aver aggiornato i dati
+                  try {
+                    if (typeof showMessageModal === "function") {
+                      showMessageModal("Nuova Song creata", "La song è stata salvata correttamente. Ora puoi caricare il file audio.", "info");
+                    } else {
+                      alert("La song è stata salvata correttamente. Ora puoi caricare il file audio.");
+                    }
+                  } catch (e) {
+                    console.error("[updateSong] Errore nel mostrare la modale di avviso:", e);
+                  }
+                  
+                  // Chiudi il modal di conferma salvataggio
+                  $("#updateModal").modal("hide");
                 },
                 error: function(xhr, status, error) {
                   console.error("[updateSong] Errore nel ricaricamento dati:", error);
+                  // Mostra comunque la modale anche in caso di errore nel ricaricamento
+                  try {
+                    if (typeof showMessageModal === "function") {
+                      showMessageModal("Nuova Song creata", "La song è stata salvata correttamente. Ora puoi caricare il file audio.", "info");
+                    } else {
+                      alert("La song è stata salvata correttamente. Ora puoi caricare il file audio.");
+                    }
+                  } catch (e) {
+                    console.error("[updateSong] Errore nel mostrare la modale di avviso:", e);
+                  }
+                  $("#updateModal").modal("hide");
                 }
               });
               
-              // Chiudi il modal dopo il successo
-              $("#updateModal").modal("hide");
               return; // Esci dalla funzione
             }
           }
