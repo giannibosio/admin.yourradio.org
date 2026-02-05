@@ -1,3 +1,6 @@
 # Cartella player
 player/
 
+# Cartella con i file audio locali per metadata (solo locale, non in git)
+tools/getmetadata/files/
+tools/getmetadata/files/**

@@ -162,6 +162,11 @@ try {
             require_once __DIR__ . '/endpoints/networks.php';
             handleNetworksRequest($requestMethod, $action, $id, $requestData);
             break;
+
+        case 'metadata':
+            require_once __DIR__ . '/endpoints/metadata.php';
+            handleMetadataRequest($requestMethod, $action, $id, $requestData);
+            break;
             
         case 'subgruppi':
             require_once __DIR__ . '/endpoints/gruppi.php';

@@ -915,7 +915,7 @@ class Id3v1
 
         }
 
-        return;
+        return '';
 
     }
 

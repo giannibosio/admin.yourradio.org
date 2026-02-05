@@ -1,0 +1,11 @@
+{
+    "name": "yourradio/admin",
+    "description": "YourRadio admin panel",
+    "require": {
+        "php": ">=5.3.0",
+        "james-heinrich/getid3": "^1.9"
+    },
+    "config": {
+        "vendor-dir": "vendor"
+    }
+}

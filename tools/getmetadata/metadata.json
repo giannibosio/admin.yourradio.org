@@ -1,0 +1,22 @@
+{
+    "generated": "2026-02-05 09:50:32",
+    "folder": "\/Users\/gibi\/Desktop\/yourradio\/ARUBA\/admin.yourradio.org\/tools\/getmetadata\/files",
+    "count": 1,
+    "errors": [],
+    "tracks": [
+        {
+            "filename": "Carl Bagge - I m Old Fashioned.mp3",
+            "filesize": 11201020,
+            "titolo": "I’m Old Fashioned",
+            "durata": "4:32",
+            "durata_secondi": 272,
+            "autori": "Carl Bagge",
+            "anno_registrazione": 2019,
+            "album": "Långholmen Sessions Vol. 1",
+            "commento": "",
+            "track": 1,
+            "genre": "",
+            "error": null
+        }
+    ]
+}
