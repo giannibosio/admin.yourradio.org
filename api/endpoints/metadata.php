@@ -94,11 +94,11 @@ function handleMetadataRequest($method, $action, $id, $data) {
             'durata_secondi'    => null,
             'autori'            => '',
             'anno_registrazione'=> null,
-            'album'             => '',
-            'commento'          => '',
-            'track'             => null,
-            'genre'             => '',
-            'error'             => null
+            //'album'             => '',
+            //'commento'          => '',
+            //'track'             => null,
+            //'genre'             => '',
+            //'error'             => null
         );
 
         try {
