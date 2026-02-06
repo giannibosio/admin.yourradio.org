@@ -160,12 +160,18 @@ class Songs extends DB
             'sg_casaDiscografica' => '',
             'sg_etichetta' => '',
             'sg_umoreId' => 0,
-            'sg_nazione' => ''
+            'sg_nazione' => '',
+            'sg_filename_origin' => ''
             // Non includere sg_file e sg_filesize nei default - verranno aggiunti solo se presenti nei dati
         );
         
         // Unisci i valori di default con i dati forniti
         $songData = array_merge($defaultFields, $song);
+        
+        // Forza sg_filename_origin a stringa (nome file originale), mai intero
+        if (array_key_exists('sg_filename_origin', $songData)) {
+            $songData['sg_filename_origin'] = (string)$songData['sg_filename_origin'];
+        }
         
         // Rimuovi campi che non devono essere inseriti
         unset($songData['job']);

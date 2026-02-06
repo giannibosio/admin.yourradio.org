@@ -69,6 +69,37 @@ function handleSongsRequest($method, $action, $id, $data) {
                 } catch (Exception $e) {
                     sendErrorResponse("Errore nel recupero della song: " . $e->getMessage(), 500);
                 }
+            } elseif ($id === null && $action === 'byfilenameorigin') {
+                // Recupera song per sg_filename_origin
+                if (!isset($_GET['filename'])) {
+                    sendErrorResponse("Parametro filename richiesto", 400);
+                }
+                try {
+                    $filename = $_GET['filename'];
+                    $query = "SELECT * FROM songs WHERE sg_filename_origin = :filename LIMIT 1";
+                    $st = Songs::$db->prepare($query);
+                    $st->execute([':filename' => $filename]);
+                    $song = $st->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($song) {
+                        sendSuccessResponse([
+                            'sg_id' => (int)$song['sg_id'],
+                            'sg_file' => isset($song['sg_file']) ? (int)$song['sg_file'] : null,
+                            'sg_filename_origin' => isset($song['sg_filename_origin']) ? $song['sg_filename_origin'] : null,
+                            'exists' => true,
+                            'song' => $song
+                        ]);
+                    } else {
+                        sendSuccessResponse([
+                            'sg_id' => null,
+                            'sg_file' => null,
+                            'sg_filename_origin' => $filename,
+                            'exists' => false
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nel recupero della song: " . $e->getMessage(), 500);
+                }
             } elseif ($id !== null && $action === 'format') {
                 // Verifica se esiste song_format per id_song e id_format
                 if (!isset($_GET['id_format'])) {
