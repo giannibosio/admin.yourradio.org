@@ -23,6 +23,7 @@ class Select {
 				return array(
 		          "0" => "SIAE",
 		          "1" => "CREATIVE C",
+				  "2" => "SOUNDREEF",
 		          "3" => "WATERMELON"
 	        	); 
 	        	break;

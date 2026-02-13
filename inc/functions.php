@@ -284,6 +284,7 @@ class Utils
 	    	<option value="*" selected="">Tutti</option>
 	    	<option value="0">Siae</option>
 	    	<option value="1">Creative C</option>
+			<option value="2">Soundreef</option>
 	    	<option value="3">WaterMelon</option>
 	    </select>
     	';
