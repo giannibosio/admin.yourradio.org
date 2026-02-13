@@ -9,6 +9,61 @@
  * POST   /api/songs/{id}/upload  - Carica file audio per una song
  */
 
+/**
+ * Azzera i metadati ID3 del file MP3 e scrive solo titolo, autore, anno, album.
+ * Rimuove ID3v2 (in testa) e ID3v1 (in coda), poi aggiunge un unico tag ID3v1.1.
+ * @param string $tmpPath Percorso del file MP3 (viene sovrascritto)
+ * @param string $title Titolo (max 30 caratteri)
+ * @param string $artist Autore (max 30 caratteri)
+ * @param string|int $year Anno (max 4 caratteri)
+ * @param string $album Album (default "YourRadio", max 30 caratteri)
+ * @return bool true se ok
+ */
+function rewriteMp3Metadata($tmpPath, $title, $artist, $year, $album = 'YourRadio') {
+    $data = file_get_contents($tmpPath);
+    if ($data === false || strlen($data) < 10) {
+        return false;
+    }
+    // Rimuovi ID3v2 in testa (header 10 byte, size in byte 6-9 synchsafe)
+    if (substr($data, 0, 3) === 'ID3') {
+        $size = (ord($data[6]) & 0x7F) << 21 | (ord($data[7]) & 0x7F) << 14
+            | (ord($data[8]) & 0x7F) << 7 | (ord($data[9]) & 0x7F);
+        $data = substr($data, 10 + $size);
+    }
+    // Rimuovi ID3v1 in coda (128 byte che iniziano con TAG)
+    if (strlen($data) >= 128 && substr($data, -128, 3) === 'TAG') {
+        $data = substr($data, 0, -128);
+    }
+    // ID3v1 usa ISO-8859-1 (Latin1); tronca a 30 byte per title/artist/album
+    $enc = 'ISO-8859-1';
+    $title  = (string)$title;
+    $artist = (string)$artist;
+    $album  = (string)$album;
+    $year   = substr((string)$year, 0, 4);
+    if (function_exists('mb_convert_encoding')) {
+        $title  = mb_convert_encoding($title, $enc, 'UTF-8');
+        $artist = mb_convert_encoding($artist, $enc, 'UTF-8');
+        $album  = mb_convert_encoding($album, $enc, 'UTF-8');
+    }
+    $title  = substr($title, 0, 30);
+    $artist = substr($artist, 0, 30);
+    $album  = substr($album, 0, 30);
+    // ID3v1.1: 128 byte total. TAG(3) + title(30) + artist(30) + album(30) + year(4) + comment(30) + genre(1)
+    // Comment block = 30 bytes: 28 comment + \0 + track (v1.1); then 1 byte genre
+    $tag = 'TAG';
+    $tag .= str_pad($title, 30, "\0");
+    $tag .= str_pad($artist, 30, "\0");
+    $tag .= str_pad($album, 30, "\0");
+    $tag .= str_pad($year, 4, "\0");
+    $tag .= str_repeat("\0", 28) . "\0" . chr(0); // comment 30 bytes (28 + null + track)
+    $tag .= chr(255); // genre
+    if (strlen($tag) !== 128) {
+        return false;
+    }
+    $data .= $tag;
+    return file_put_contents($tmpPath, $data, LOCK_EX) !== false;
+}
+
 function handleSongsRequest($method, $action, $id, $data) {
     switch ($method) {
         case 'GET':
@@ -318,6 +373,18 @@ function handleSongsRequest($method, $action, $id, $data) {
                     sendErrorResponse("La directory di destinazione non è scrivibile: " . $remoteDir, 500);
                 }
                 
+                // Recupera dalla song in DB titolo, autore, anno per i metadati MP3
+                $songRow = Songs::selectSongById($id);
+                $songData = !empty($songRow) ? $songRow[0] : array();
+                $metaTitle  = isset($songData['sg_titolo'])  ? trim((string)$songData['sg_titolo'])  : '';
+                $metaArtist = isset($songData['sg_artista']) ? trim((string)$songData['sg_artista']) : '';
+                $metaYear   = isset($songData['sg_anno'])    ? trim((string)$songData['sg_anno'])    : '';
+                
+                // Azzera metadati esistenti e scrivi solo: titolo, autore, anno, album = YourRadio
+                if (!rewriteMp3Metadata($tmpPath, $metaTitle, $metaArtist, $metaYear, 'YourRadio')) {
+                    sendErrorResponse("Impossibile riscrivere i metadati del file MP3", 500);
+                }
+                
                 // Sposta il file caricato nella directory di destinazione
                 if (!move_uploaded_file($tmpPath, $remotePath)) {
                     $lastError = error_get_last();
@@ -331,9 +398,15 @@ function handleSongsRequest($method, $action, $id, $data) {
                 // Verifica che il file sia stato spostato correttamente
                 if (!file_exists($remotePath)) {
                     sendErrorResponse("Il file non è stato salvato correttamente: " . $remotePath, 500);
-                } 
+                }
                 
-                // Aggiorna il database con il nome del file
+                // Calcola il filesize del file salvato sul server
+                $fileSize = filesize($remotePath);
+                if ($fileSize === false) {
+                    sendErrorResponse("Impossibile calcolare la dimensione del file salvato: " . $remotePath, 500);
+                }
+                
+                // Aggiorna il database con il nome del file e il filesize
                 try {
                     // Prima verifica se esiste già una song (diversa da questa) con lo stesso sg_file
                     $checkQuery = "SELECT `sg_id` FROM `songs` WHERE `sg_file` = :filename AND `sg_id` != :id";
@@ -351,12 +424,12 @@ function handleSongsRequest($method, $action, $id, $data) {
                         $clearSt->execute(array(':other_id' => $existingSong['sg_id']));
                     }
                     
-                    // Ora aggiorna questa song con il nuovo sg_file
+                    // Ora aggiorna questa song con il nuovo sg_file e sg_filesize
                     $updateQuery = "UPDATE `songs` SET `sg_file` = :filename, `sg_filesize` = :filesize WHERE `sg_id` = :id";
                     $updateSt = Songs::$db->prepare($updateQuery);
                     $result = $updateSt->execute(array(
-                        ':filename' => $id, // Salva solo l'ID, l'estensione è .mp3
-                        ':filesize' => $file['size'],
+                        ':filename' => $id,
+                        ':filesize' => $fileSize,
                         ':id' => $id
                     ));
                     
@@ -371,7 +444,7 @@ function handleSongsRequest($method, $action, $id, $data) {
                 sendSuccessResponse(array(
                     'filename' => $newFilename,
                     'path' => '/player/song/' . $newFilename,
-                    'size' => $file['size']
+                    'size' => $fileSize
                 ), "File caricato con successo");
             } else {
                 sendErrorResponse("Action non valida", 400);
