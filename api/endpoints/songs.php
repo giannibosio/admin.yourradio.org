@@ -331,7 +331,7 @@ function handleSongsRequest($method, $action, $id, $data) {
                 // Verifica che il file sia stato spostato correttamente
                 if (!file_exists($remotePath)) {
                     sendErrorResponse("Il file non è stato salvato correttamente: " . $remotePath, 500);
-                }
+                } 
                 
                 // Aggiorna il database con il nome del file
                 try {
