@@ -221,7 +221,19 @@ function handleSongsRequest($method, $action, $id, $data) {
                 if (isset($_GET['umore'])) $filter['umore'] = sanitizeInput($_GET['umore']);
                 if (isset($_GET['ritmo'])) $filter['ritmo'] = (int)$_GET['ritmo'];
                 if (isset($_GET['energia'])) $filter['energia'] = (int)$_GET['energia'];
-                if (isset($_GET['anno'])) $filter['anno'] = (int)$_GET['anno'];
+                // Anno: range DAL - AL. Se AL è 0 (TUTTI) e DAL è valorizzato = DAL fino ad anno attuale
+                $annoDal = isset($_GET['anno_dal']) ? (int)$_GET['anno_dal'] : 0;
+                $annoAl  = isset($_GET['anno_al'])  ? (int)$_GET['anno_al']  : 0;
+                if ($annoDal > 0) {
+                    if ($annoAl === 0) {
+                        $annoAl = (int)date('Y');
+                    }
+                    if ($annoDal > $annoAl) {
+                        sendErrorResponse("Anno DAL deve essere minore o uguale ad Anno AL", 400);
+                    }
+                    $filter['anno_dal'] = $annoDal;
+                    $filter['anno_al']  = $annoAl;
+                }
                 if (isset($_GET['periodo'])) $filter['periodo'] = (int)$_GET['periodo'];
                 if (isset($_GET['genere'])) $filter['genere'] = (int)$_GET['genere'];
                 // Gestisci diritti: aggiungi al filtro solo se è un valore numerico valido (non "*" o vuoto)

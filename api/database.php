@@ -414,9 +414,11 @@ class Songs extends DB
             $where[] = "sg_energia = :energia";
             $params[':energia'] = $filter['energia'];
         }
-        if(isset($filter['anno']) && $filter['anno'] > 0){
-            $where[] = "sg_anno = :anno";
-            $params[':anno'] = $filter['anno'];
+        // Range anno: anno_dal e anno_al (se AL è TUTTI l'endpoint imposta anno_al = anno corrente)
+        if(isset($filter['anno_dal']) && isset($filter['anno_al']) && $filter['anno_dal'] > 0){
+            $where[] = "s.sg_anno >= :anno_dal AND s.sg_anno <= :anno_al";
+            $params[':anno_dal'] = $filter['anno_dal'];
+            $params[':anno_al']  = $filter['anno_al'];
         }
         if(isset($filter['periodo']) && $filter['periodo'] > 0){
             $where[] = "sg_periodoId = :periodo";

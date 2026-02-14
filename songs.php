@@ -462,7 +462,17 @@ $(document).ready(function() {
     var dirittiVal = $("#f_diritti").val();
     var dirittiQuery = (dirittiVal && dirittiVal !== \'*\' && dirittiVal !== \'\') ? "&diritti="+encodeURIComponent(dirittiVal) : "";
     
-    var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+"&anno="+$("#f_anno").val()+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+dirittiQuery;
+    // Anno: range DAL - AL. Controllo: DAL deve essere <= AL (se entrambi valorizzati). Se AL è TUTTI e DAL è valorizzato = DAL fino ad anno attuale.
+    var annoDal = parseInt($("#f_anno_dal").val(), 10) || 0;
+    var annoAl  = parseInt($("#f_anno_al").val(), 10) || 0;
+    if (annoDal > 0 && annoAl > 0 && annoDal > annoAl) {
+      alert("Anno DAL deve essere minore o uguale ad Anno AL.");
+      return;
+    }
+    var annoDalParam = annoDal > 0 ? "&anno_dal=" + annoDal : "";
+    var annoAlParam  = annoAl > 0  ? "&anno_al=" + annoAl : "";
+    
+    var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+annoDalParam+annoAlParam+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+dirittiQuery;
 
     table.ajax.url( reloadTable ).load();
   }

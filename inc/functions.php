@@ -236,15 +236,20 @@ class Utils
 	    </select>
     	';
 
-    	//Anno
+    	// Anno: range DAL - AL (entrambi select, stesso elenco: TUTTI + anni in ordine inverso fino a 1941)
+    	$annoOptions = '';
+    	for($a=(int)date('Y');$a>1940;$a=$a-1){
+    		$annoOptions .= '<option value="'.$a.'">'.$a.'</option>';
+    	}
     	$sel .= '
-    	<label class="songFilter_select">Anno</label>
-    	<select id="f_anno" name="f_anno" class="form-control songFilter_select">
-	    	<option value="0" selected="0">Tutti</option>';
-		    for($a=date('Y');$a>1940;$a=$a-1){
-		    	$sel.='<option value="'.$a.'">'.$a.'</option>';
-		    }
-	    $sel.='</select>';
+    	<label class="songFilter_select">Anno DAL</label>
+    	<select id="f_anno_dal" name="f_anno_dal" class="form-control songFilter_select">
+	    	<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
+	    </select>
+    	<label class="songFilter_select">Anno AL</label>
+    	<select id="f_anno_al" name="f_anno_al" class="form-control songFilter_select">
+	    	<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
+	    </select>';
 
 	    //Periodo
     	$sel .= '
