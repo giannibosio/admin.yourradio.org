@@ -48,6 +48,15 @@ $tables = '';
 $scripts = '';
 
 $tables.='
+<style>
+/* Su mobile: nascondi Righe (label + select), mostra solo Search */
+@media (max-width: 767px) {
+  #dataTable-'.$tableId.'_filter .songs-filter-right-box label:first-child,
+  #dataTable-'.$tableId.'_filter .songs-filter-right-box #f_page_length {
+    display: none !important;
+  }
+}
+</style>
 <!-- table '.$tableId.' --> 
 <div class="card shadow mb-6">
   <div class="card-body col-md-12">
@@ -116,9 +125,16 @@ function saveFiltersToSession() {
     }
   });
   
-  // Se non ci sono filtri non-default, non salvare (evita di sovrascrivere con valori vuoti)
-  if (!hasNonDefaultFilters) {
-    console.log("[songs] Filtri vuoti o di default, non salvo in sessione");
+  // Salva sempre il limite di paginazione (righe per pagina)
+  var $pageLength = $("#f_page_length");
+  if ($pageLength.length) {
+    filters.f_page_length = $pageLength.val() || "50";
+  }
+  
+  // Salva sempre quando c\'è almeno f_page_length, anche se è "25":
+  // così in sessione non resta un vecchio valore (es. 50) che al reload fa scattare la select
+  if (!hasNonDefaultFilters && !filters.f_page_length) {
+    console.log("[songs] Nessun filtro da salvare");
     return;
   }
   
@@ -162,7 +178,7 @@ function loadFiltersFromSession(callback) {
         var appliedFilters = []; // Traccia quali filtri sono stati applicati
         
         for (var id in filters) {
-          if (filters.hasOwnProperty(id) && id !== \'undefined\') {
+          if (filters.hasOwnProperty(id) && id !== \'undefined\' && id !== \'f_page_length\') {
             var $element = $("#" + id);
             console.log("[songs] Applico filtro", id, "=", filters[id], "Elemento trovato:", $element.length);
             if ($element.length > 0) {
@@ -203,6 +219,17 @@ function loadFiltersFromSession(callback) {
           }
         }
         
+        // Applica il limite di paginazione (righe per pagina) — valore sempre stringa per la select
+        if (filters.f_page_length !== undefined && filters.f_page_length !== null && filters.f_page_length !== \'\') {
+          var $pl = $("#f_page_length");
+          var lenStr = String(filters.f_page_length);
+          if ($pl.length) {
+            $pl.val(lenStr);
+          }
+          var pageLen = (lenStr === "-1" || lenStr === "tutte") ? -1 : (parseInt(lenStr, 10) || 50);
+          table.page.len(pageLen).draw();
+        }
+        
         if (filtersApplied) {
           // Aggiorna il display dei format dopo il caricamento
           setTimeout(function() {
@@ -234,6 +261,9 @@ function loadFiltersFromSession(callback) {
         console.log("[songs] Nessun filtro salvato nella sessione");
         filtersLoaded = true;
         filtersRestoredFromSession = false; // Nessun filtro da ripristinare
+        // Default: select Righe a 50 e tabella a 50 righe
+        $("#f_page_length").val("50");
+        table.page.len(50).draw();
         if (typeof callback === \'function\') {
           callback(false);
         }
@@ -309,7 +339,7 @@ $(document).ready(function() {
     ],
 
     "rowId": "id",
-    "iDisplayLength": 25,
+    "pageLength": 50,
     "ordering": true,
     "columnDefs": [
     { "visible": true, "targets": artistaColumn },
@@ -345,6 +375,33 @@ $(document).ready(function() {
     "searching": true
 
   });
+
+  // Box unico per Righe + Search, allineati a destra con label allineate
+  var $filterDiv = $("#dataTable-'.$tableId.'_filter");
+  if ($filterDiv.length) {
+    var pageLengthHtml = \'<label class="songs-filter-right-label mr-0 mb-0">Righe</label><select id="f_page_length" class="form-control form-control-sm songs-filter-right-control mb-1">\' +
+      \'<option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="-1">Tutte</option>\' +
+      \'</select>\';
+    $filterDiv.prepend(pageLengthHtml);
+    $("#f_page_length").val("50"); // default 50 righe se non c\'è valore in sessione
+    // Raggruppa Righe (label+select) e Search (label+input) in un unico box a destra
+    var $righeLabel = $("#f_page_length").prev("label");
+    var $searchLabel = $filterDiv.find("label").last();
+    if ($righeLabel.length && $searchLabel.length) {
+      $righeLabel.add("#f_page_length").add($searchLabel).wrapAll(\'<div class="songs-filter-right-box"></div>\');
+      var $box = $(".songs-filter-right-box");
+      $box.css({ "display": "flex", "align-items": "center", "flex-wrap": "nowrap", "gap": "0.4rem" });
+      $box.find("label").css({ "min-width": "3.5rem", "margin-right": "0.25rem", "margin-bottom": 0 });
+      $box.find(".songs-filter-right-control").css({ "width": "auto", "min-width": "70px", "display": "inline-block" });
+      $box.find("input").css({ "width": "auto", "min-width": "120px", "display": "inline-block" }).addClass("form-control form-control-sm mb-1");
+    }
+    $("#f_page_length").on("change", function() {
+      var val = $(this).val();
+      var len = (val === "-1") ? -1 : (parseInt(val, 10) || 50);
+      table.page.len(len).draw();
+      saveFiltersToSession();
+    });
+  }
 
   $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(){
     var id=$(this).attr("id");
@@ -431,6 +488,9 @@ $(document).ready(function() {
     $("#f_diritti").val("*");
     // Reset la multiselect format
     $("#f_format option").prop("selected", false);
+    // Reset righe per pagina
+    $("#f_page_length").val("50");
+    table.page.len(50).draw();
     updateFormatDisplay();
     // Rimuovi i filtri dalla sessione PHP lato applicazione
     $.ajax({
@@ -474,7 +534,12 @@ $(document).ready(function() {
     
     var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+annoDalParam+annoAlParam+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+dirittiQuery;
 
-    table.ajax.url( reloadTable ).load();
+    table.ajax.url( reloadTable ).load(function() {
+      // Ripristina il numero di righe dalla select dopo ogni reload
+      var lenVal = $("#f_page_length").val();
+      var pl = (lenVal === "-1") ? -1 : (parseInt(lenVal, 10) || 50);
+      table.page.len(pl).draw();
+    });
   }
 
   
