@@ -64,6 +64,7 @@ $tables.='
     <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
       <thead>
         <tr>
+          <th>ID</th>
           <th>Artista</th>
           <th>Titolo</th>
           <th>Anno</th>
@@ -71,6 +72,7 @@ $tables.='
       </thead>
       <tfoot>
         <tr>
+          <th>ID</th>
           <th>Artista</th>
           <th>Titolo</th>
           <th>Anno</th>
@@ -320,8 +322,9 @@ $(document).ready(function() {
     }
   });
   
-  var artistaColumn = 0;
-  var activeColumn = 3;
+  var idColumn = 0;
+  var artistaColumn = 1;
+  var activeColumn = 4;
   var table=$("#dataTable-'.$tableId.'").DataTable( {
 
     "dom": "frtip",
@@ -332,6 +335,7 @@ $(document).ready(function() {
     },
 
     "columns": [
+    { "data": "id" },
     { "data": "artista" },
     { "data": "titolo" },
     { "data": "anno" },
@@ -342,7 +346,7 @@ $(document).ready(function() {
     "pageLength": 50,
     "ordering": true,
     "columnDefs": [
-    { "visible": true, "targets": artistaColumn },
+    { "visible": true, "targets": [idColumn, artistaColumn] },
     { "visible": false, "targets": activeColumn }
     ],
 
@@ -355,10 +359,11 @@ $(document).ready(function() {
     "rowCallback": function( row, data ) {
       $(row).addClass("rowPingMonitor");
       $("td:eq(0)",row).addClass("toNeverHide");
-      $("td:eq(0)",row).attr("id",$(row).attr("id")+"-artista");
       $("td:eq(1)",row).addClass("toNeverHide");
-      $("td:eq(1)",row).attr("id",$(row).attr("id")+"-titolo");
+      $("td:eq(1)",row).attr("id",$(row).attr("id")+"-artista");
       $("td:eq(2)",row).addClass("toNeverHide");
+      $("td:eq(2)",row).attr("id",$(row).attr("id")+"-titolo");
+      $("td:eq(3)",row).addClass("toNeverHide");
 
       if(data.attivo==1){
           $(row).addClass("pingMonitorGreen");
