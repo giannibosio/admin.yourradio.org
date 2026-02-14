@@ -134,6 +134,32 @@ class Utils
     	</select>';
     	$sel.='<small class="form-text text-muted">Clicca per selezionare/deselezionare. Tieni premuto Ctrl (o Cmd su Mac) per selezionare più format</small>';
 
+    	// Card Anno (DAL / AL sulla stessa riga) — fuori dall\'accordion, sopra Abilitate
+    	$annoOptions = '';
+    	for($a=(int)date('Y');$a>1940;$a=$a-1){
+    		$annoOptions .= '<option value="'.$a.'">'.$a.'</option>';
+    	}
+    	$sel .= '
+    	<div class="card my-3 py-2">
+    		<div class="card-header py-0 border-bottom border-light"><h6 class="mb-0">Anno</h6></div>
+    		<div class="card-body py-0">
+    			<div class="row align-items-end">
+    				<div class="col-auto">
+    					<label class="songFilter_select mb-0 mt-0 mr-0">DAL</label>
+    					<select id="f_anno_dal" name="f_anno_dal" class="form-control form-control-sm songFilter_select" style="min-width:90px;">
+    						<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
+    					</select>
+    				</div>
+    				<div class="col-auto">
+    					<label class="songFilter_select mb-0 mt-0 mr-0">AL</label>
+    					<select id="f_anno_al" name="f_anno_al" class="form-control form-control-sm songFilter_select" style="min-width:90px;">
+    						<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
+    					</select>
+    				</div>
+    			</div>
+    		</div>
+    	</div>';
+
     	//Active
     	$sel .= '
     	<label class="songFilter_select">Abilitate</label>
@@ -235,21 +261,6 @@ class Utils
 	    	<option value="5">Energia 5</option>
 	    </select>
     	';
-
-    	// Anno: range DAL - AL (entrambi select, stesso elenco: TUTTI + anni in ordine inverso fino a 1941)
-    	$annoOptions = '';
-    	for($a=(int)date('Y');$a>1940;$a=$a-1){
-    		$annoOptions .= '<option value="'.$a.'">'.$a.'</option>';
-    	}
-    	$sel .= '
-    	<label class="songFilter_select">Anno DAL</label>
-    	<select id="f_anno_dal" name="f_anno_dal" class="form-control songFilter_select">
-	    	<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
-	    </select>
-    	<label class="songFilter_select">Anno AL</label>
-    	<select id="f_anno_al" name="f_anno_al" class="form-control songFilter_select">
-	    	<option value="0" selected="selected">Tutti</option>'.$annoOptions.'
-	    </select>';
 
 	    //Periodo
     	$sel .= '
