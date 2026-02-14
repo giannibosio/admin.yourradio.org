@@ -158,7 +158,7 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
       <div class="mb-3">
         <div class="custom-control custom-switch">
           <input type="checkbox" class="custom-control-input" <?=$chbox_active?> id="sg_attivo" name="sg_attivo" value="1">
-          <label class="custom-control-label" for="sg_attivo"><?=$chbox_active_lab?></label>
+          <label class="custom-control-label" for="sg_attivo">Attivo <!-- song status: <?=$chbox_active_lab?> --> </label>
         </div>
       </div>
     </div>
@@ -295,10 +295,10 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
       
       <button title="CANCELLA" type="button" class="btn btn-outline-danger" id="btnDelete" data-toggle="modal" data-target="#verticalModal" style="display:none;"><span class="fe fe-trash fe-16"></span></button>
       
-      <button title="UPLOAD" type="button" class="btn btn-outline-danger" id="btnUpload" data-toggle="modal" data-target="#uploadModal" style="display:none;"><span class="fe fe-upload fe-16"></span></button>
+      <button title="UPLOAD" type="button" class="btn btn-outline-primary" id="btnUpload" data-toggle="modal" data-target="#uploadModal" style="display:none;"><span class="fe fe-upload fe-16"></span></button>
 
       
-      <button style="<?php echo (!$file_audio_ok) ? 'display:none;' : ''?>" title="DOWNLOAD file" type="button" class="btn btn-outline-danger" id="downloadFile"><span class="fe fe-play fe-16"></span></button>
+      <button style="<?php echo (!$file_audio_ok) ? 'display:none;' : ''?>" title="DOWNLOAD file" type="button" class="btn btn-outline-primary" id="downloadFile"><span class="fe fe-play fe-16"></span></button>
 
 
     </div>
@@ -317,8 +317,8 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
         </div>
         <div class="modal-body">Vuoi salvare le modifiche ?</div>
         <div class="modal-footer">
-          <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-          <button class="btn mb-2 btn-danger" id="updateSong">Salva</button>
+          <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">ANNULLA</button>
+          <button class="btn mb-2 btn-danger" id="updateSong">SI</button>
         </div>
       </div>
     </div>
@@ -337,7 +337,7 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
         <div class="modal-body" id="deleteSongModalBody">Eliminare definitivamente questa song?</div>
         <div class="modal-footer">
           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-          <button class="btn mb-2 btn-danger" id="deleteSong" data-dismiss="modal">Cancella</button>
+          <button class="btn mb-2 btn-danger" id="deleteSong" data-dismiss="modal">SI</button>
         </div>
       </div>
     </div>
