@@ -56,6 +56,42 @@ $tables.='
     display: none !important;
   }
 }
+/* Colonna checkbox: nascosta su mobile, solo desktop */
+@media (max-width: 767px) {
+  #dataTable-'.$tableId.' th.songs-checkbox-col,
+  #dataTable-'.$tableId.' td.songs-checkbox-col {
+    display: none !important;
+  }
+}
+/* Pulsante ABBINA AL FORMAT: solo desktop */
+@media (max-width: 767px) {
+  .songs-abbina-desktop-only {
+    display: none !important;
+  }
+}
+/* Link Seleziona tutti: solo desktop (stessa colonna checkbox) */
+@media (max-width: 767px) {
+  .songs-select-all-wrap {
+    display: none !important;
+  }
+}
+/* Colonna ID: nascosta su mobile, visibile su desktop */
+@media (max-width: 767px) {
+  #dataTable-'.$tableId.' th.songs-id-col,
+  #dataTable-'.$tableId.' td.songs-id-col {
+    display: none !important;
+  }
+}
+/* Paginazione: padding link e contenuto centrato */
+#dataTable-'.$tableId.'_paginate .page-link {
+  padding: 0.3rem;
+}
+#dataTable-'.$tableId.'_paginate {
+  text-align: center;
+}
+#dataTable-'.$tableId.'_paginate .pagination {
+  justify-content: center;
+}
 </style>
 <!-- table '.$tableId.' --> 
 <div class="card shadow mb-6">
@@ -64,7 +100,8 @@ $tables.='
     <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
       <thead>
         <tr>
-          <th>ID</th>
+          <th class="songs-checkbox-col"></th>
+          <th class="songs-id-col">ID</th>
           <th>Artista</th>
           <th>Titolo</th>
           <th>Anno</th>
@@ -72,13 +109,38 @@ $tables.='
       </thead>
       <tfoot>
         <tr>
-          <th>ID</th>
+          <th class="songs-checkbox-col"></th>
+          <th class="songs-id-col">ID</th>
           <th>Artista</th>
           <th>Titolo</th>
           <th>Anno</th>
         </tr>
       </tfoot>
     </table>
+  </div>
+</div>
+<!-- Modale Abbina al format -->
+<div class="modal fade" id="modalAbbinaFormat" tabindex="-1" role="dialog" aria-labelledby="modalAbbinaFormatTitle" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalAbbinaFormatTitle">Abbina al format</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Chiudi">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="modalAbbinaFormatText">Seleziona il format a cui vuoi abbinare le <span id="modalAbbinaFormatTot">0</span> song selezionate.</p>
+        <label for="abbinaFormat_select">Format</label>
+        <select id="abbinaFormat_select" class="form-control">
+          <option value="">-- Seleziona format --</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Annulla</button>
+        <button type="button" class="btn btn-primary" id="abbinaFormatConfermaBtn">Conferma</button>
+      </div>
+    </div>
   </div>
 </div>
 <!-- //table '.$tableId.' --> 
@@ -322,9 +384,11 @@ $(document).ready(function() {
     }
   });
   
-  var idColumn = 0;
-  var artistaColumn = 1;
-  var activeColumn = 4;
+  var checkboxColumn = 0;
+  var idColumn = 1;
+  var artistaColumn = 2;
+  var activeColumn = 5;
+  var selectedSongIds = [];
   var table=$("#dataTable-'.$tableId.'").DataTable( {
 
     "dom": "frtip",
@@ -335,7 +399,8 @@ $(document).ready(function() {
     },
 
     "columns": [
-    { "data": "id" },
+    { "data": null, "orderable": false, "searchable": false, "className": "songs-checkbox-col", "defaultContent": \'<input type="checkbox" class="song-row-cb" />\' },
+    { "data": "id", "className": "songs-id-col" },
     { "data": "artista" },
     { "data": "titolo" },
     { "data": "anno" },
@@ -346,7 +411,7 @@ $(document).ready(function() {
     "pageLength": 50,
     "ordering": true,
     "columnDefs": [
-    { "visible": true, "targets": [idColumn, artistaColumn] },
+    { "visible": true, "targets": [checkboxColumn, idColumn, artistaColumn] },
     { "visible": false, "targets": activeColumn }
     ],
 
@@ -354,23 +419,26 @@ $(document).ready(function() {
       var api = this.api();
       var rows = api.rows( {page:"current"} ).nodes();
       var last=null;
+      updateSelectAllLinkText();
       },
 
     "rowCallback": function( row, data ) {
       $(row).addClass("rowPingMonitor");
-      $("td:eq(0)",row).addClass("toNeverHide");
-      $("td:eq(1)",row).addClass("toNeverHide");
-      $("td:eq(1)",row).attr("id",$(row).attr("id")+"-artista");
+      $("td:eq(0)",row).addClass("songs-checkbox-col");
+      $("td:eq(1)",row).addClass("songs-id-col toNeverHide");
       $("td:eq(2)",row).addClass("toNeverHide");
-      $("td:eq(2)",row).attr("id",$(row).attr("id")+"-titolo");
+      $("td:eq(2)",row).attr("id",$(row).attr("id")+"-artista");
       $("td:eq(3)",row).addClass("toNeverHide");
-
+      $("td:eq(3)",row).attr("id",$(row).attr("id")+"-titolo");
+      $("td:eq(4)",row).addClass("toNeverHide");
+      var rowId = data.id;
+      var $cb = $("td:eq(0) input.song-row-cb", row);
+      $cb.prop("checked", selectedSongIds.indexOf(rowId) !== -1);
       if(data.attivo==1){
           $(row).addClass("pingMonitorGreen");
         }else{
           $(row).addClass("pingMonitorWhite");
         }
-      
     },
 
     "paging":   true,
@@ -379,6 +447,41 @@ $(document).ready(function() {
 
     "searching": true
 
+  });
+
+  var $dtWrapper = $(table.table().container());
+  if ($("#songs-select-all-link-wrap").length === 0) {
+    $dtWrapper.append(\'<div class="songs-select-all-wrap mt-2 mb-2" id="songs-select-all-link-wrap"><a href="#" class="songs-select-all-link" id="songsSelectAllLink">Seleziona tutti</a></div>\');
+  }
+  $("body").on("click", "#songsSelectAllLink", function(e) {
+    e.preventDefault();
+    var $link = $(this);
+    var rows = table.rows({ page: "current", search: "applied" }).nodes();
+    var visibleIds = [];
+    $(rows).each(function() {
+      var id = $(this).attr("id");
+      if (id) visibleIds.push(parseInt(id, 10));
+    });
+    if (visibleIds.length === 0) return;
+    var allChecked = visibleIds.every(function(id) { return selectedSongIds.indexOf(id) !== -1; });
+    if (allChecked) {
+      visibleIds.forEach(function(id) {
+        selectedSongIds = selectedSongIds.filter(function(x) { return x !== id; });
+      });
+      $(rows).each(function() {
+        $("input.song-row-cb", this).prop("checked", false);
+      });
+      $link.text("Seleziona tutti");
+    } else {
+      visibleIds.forEach(function(id) {
+        if (selectedSongIds.indexOf(id) === -1) selectedSongIds.push(id);
+      });
+      $(rows).each(function() {
+        $("input.song-row-cb", this).prop("checked", true);
+      });
+      $link.text("Deseleziona tutti");
+    }
+    updateAbbinaButton();
   });
 
   // Box unico per Righe + Search, allineati a destra con label allineate
@@ -408,15 +511,122 @@ $(document).ready(function() {
     });
   }
 
-  $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(){
+  $("body").on("click", "#dataTable-'.$tableId.' tbody tr", function(e){
+    if ($(e.target).closest(".songs-checkbox-col").length) return;
     var id=$(this).attr("id");
     $(".rowPingMonitor").css("background-color","transparent");
     $(this).css("background-color","#9e9e9e5e");
     console.log("Apro scheda "+id);
-    //window.open("song-scheda.php?id="+id,"_self");
     openSong(id);
   });
+
+  $("body").on("change", "#dataTable-'.$tableId.' input.song-row-cb", function(e) {
+    e.stopPropagation();
+    var row = $(this).closest("tr");
+    var id = row.attr("id");
+    if (!id) return;
+    var numId = parseInt(id, 10);
+    if ($(this).prop("checked")) {
+      if (selectedSongIds.indexOf(numId) === -1) selectedSongIds.push(numId);
+    } else {
+      selectedSongIds = selectedSongIds.filter(function(x) { return x !== numId; });
+    }
+    updateAbbinaButton();
+    updateSelectAllLinkText();
+  });
+
+  function updateSelectAllLinkText() {
+    var $link = $("#songsSelectAllLink");
+    if (!$link.length) return;
+    var rows = table.rows({ page: "current", search: "applied" }).nodes();
+    var visibleIds = [];
+    var allChecked = true;
+    $(rows).each(function() {
+      var id = $(this).attr("id");
+      if (id) {
+        var numId = parseInt(id, 10);
+        visibleIds.push(numId);
+        if (selectedSongIds.indexOf(numId) === -1) allChecked = false;
+      }
+    });
+    if (visibleIds.length === 0) { $link.text("Seleziona tutti"); return; }
+    $link.text(allChecked ? "Deseleziona tutti" : "Seleziona tutti");
+  }
+
+  function updateAbbinaButton() {
+    var $btn = $("#abbinaFormatBtn");
+    if ($btn.length) {
+      $btn.prop("disabled", selectedSongIds.length === 0);
+    }
+  }
   
+  // Handler per il pulsante "ABBINA AL FORMAT"
+  $("#abbinaFormatBtn").on("click", function(){
+    var tot = selectedSongIds.length;
+    $("#modalAbbinaFormatTot").text(tot);
+    $("#abbinaFormat_select").empty().append(\'<option value="">-- Seleziona format --</option>\');
+    $.ajax({
+      url: "https://yourradio.org/api/formats?t=" + new Date().getTime(),
+      method: "GET",
+      dataType: "json",
+      cache: false,
+      success: function(response) {
+        if (response.success && response.data && response.data.length) {
+          response.data.forEach(function(format) {
+            var frmtId = format.frmt_id || \'\';
+            var frmtNome = (format.frmt_nome && format.frmt_nome !== \'\') ? format.frmt_nome : \'Format #\' + frmtId;
+            $("#abbinaFormat_select").append(\'<option value="\' + frmtId + \'">\' + frmtNome + \'</option>\');
+          });
+        }
+      },
+      error: function() {
+        console.error("[songs] Errore caricamento format per modale Abbina");
+      }
+    });
+    $("#modalAbbinaFormat").modal("show");
+  });
+
+  $("#abbinaFormatConfermaBtn").on("click", function() {
+    var idFormat = $("#abbinaFormat_select").val();
+    if (!idFormat || idFormat === \'\') {
+      alert("Seleziona un format.");
+      return;
+    }
+    if (selectedSongIds.length === 0) {
+      alert("Nessuna song selezionata.");
+      return;
+    }
+    var $btn = $(this);
+    $btn.prop("disabled", true);
+    $.ajax({
+      url: "https://yourradio.org/api/songs/bulk-format",
+      method: "POST",
+      contentType: "application/json; charset=utf-8",
+      dataType: "json",
+      data: JSON.stringify({ song_ids: selectedSongIds, id_format: parseInt(idFormat, 10) }),
+      success: function(response) {
+        $("#modalAbbinaFormat").modal("hide");
+        var d = response.data || {};
+        var msg = "Abbinamento completato: " + (d.created || 0) + " abbinamenti creati";
+        if (d.already_existed > 0) msg += ", " + d.already_existed + " già esistenti";
+        alert(msg);
+        selectedSongIds = [];
+        table.rows().every(function() {
+          var row = this.node();
+          $("input.song-row-cb", row).prop("checked", false);
+        });
+        updateAbbinaButton();
+      },
+      error: function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore durante l\'abbinamento.";
+        alert(msg);
+      },
+      complete: function() {
+        $btn.prop("disabled", false);
+      }
+    });
+  });
+
   // Handler per il pulsante "Nuova Song"
   $("#nuovaSongBtn").on("click", function(){
     console.log("Apro nuova song");

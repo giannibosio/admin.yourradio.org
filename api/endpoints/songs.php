@@ -278,7 +278,36 @@ function handleSongsRequest($method, $action, $id, $data) {
             break;
             
         case 'POST':
-            if ($id === null && $action === '') {
+            if ($id === null && $action === 'bulk-format') {
+                // Abbina più song a un format: per ogni song verifica se esiste già la relazione in song_format, altrimenti la crea
+                if (!isset($data['song_ids']) || !is_array($data['song_ids']) || !isset($data['id_format'])) {
+                    sendErrorResponse("Parametri song_ids (array) e id_format richiesti", 400);
+                }
+                $songIds = array_map('intval', $data['song_ids']);
+                $songIds = array_filter($songIds, function($v) { return $v > 0; });
+                $idFormat = (int)$data['id_format'];
+                if ($idFormat <= 0) {
+                    sendErrorResponse("id_format non valido", 400);
+                }
+                $created = 0;
+                $alreadyExisted = 0;
+                $checkSt = Songs::$db->prepare("SELECT id_song FROM song_format WHERE id_song = :id_song AND id_format = :id_format LIMIT 1");
+                $insertSt = Songs::$db->prepare("INSERT INTO song_format (id_song, id_format) VALUES (:id_song, :id_format)");
+                foreach ($songIds as $idSong) {
+                    $checkSt->execute([':id_song' => $idSong, ':id_format' => $idFormat]);
+                    if ($checkSt->fetch(PDO::FETCH_ASSOC)) {
+                        $alreadyExisted++;
+                    } else {
+                        $insertSt->execute([':id_song' => $idSong, ':id_format' => $idFormat]);
+                        $created++;
+                    }
+                }
+                sendSuccessResponse([
+                    'created' => $created,
+                    'already_existed' => $alreadyExisted,
+                    'total' => count($songIds)
+                ], "Abbinamento completato");
+            } elseif ($id === null && $action === '') {
                 // Crea nuova song
                 $newId = Songs::createSong($data);
                 if ($newId) {
