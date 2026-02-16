@@ -92,10 +92,29 @@ $tables.='
 #dataTable-'.$tableId.'_paginate .pagination {
   justify-content: center;
 }
+/* Overlay aggiornamento lista */
+.songs-table-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(60, 60, 60, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.songs-table-loading-wrap { position: relative; }
 </style>
 <!-- table '.$tableId.' --> 
 <div class="card shadow mb-6">
-  <div class="card-body col-md-12">
+  <div class="card-body col-md-12 songs-table-loading-wrap">
+    <div id="songs-table-loading" class="songs-table-loading-overlay" style="display: none;" aria-hidden="true">
+      <div class="spinner-border text-primary" role="status" style="width: 2.5rem; height: 2.5rem;">
+        <span class="sr-only">Aggiornamento...</span>
+      </div>
+    </div>
     <!-- table -->
     <table class="table datatables display table-sm table-'.$tableId.'" id="dataTable-'.$tableId.'" style="width:100%">
       <thead>
@@ -195,6 +214,15 @@ function saveFiltersToSession() {
     filters.f_page_length = $pageLength.val() || "50";
   }
   
+  // Salva ordinamento e ricerca dalla DataTable (ID, righe, ricerca)
+  var dt = $("#dataTable-'.$tableId.'").DataTable();
+  if (dt) {
+    var searchVal = dt.search();
+    if (searchVal !== undefined && searchVal !== null) filters.f_search = searchVal;
+    var orderVal = dt.order();
+    if (orderVal && Array.isArray(orderVal) && orderVal.length) filters.f_order = orderVal;
+  }
+  
   // Salva sempre quando c\'è almeno f_page_length, anche se è "25":
   // così in sessione non resta un vecchio valore (es. 50) che al reload fa scattare la select
   if (!hasNonDefaultFilters && !filters.f_page_length) {
@@ -242,7 +270,7 @@ function loadFiltersFromSession(callback) {
         var appliedFilters = []; // Traccia quali filtri sono stati applicati
         
         for (var id in filters) {
-          if (filters.hasOwnProperty(id) && id !== \'undefined\' && id !== \'f_page_length\') {
+          if (filters.hasOwnProperty(id) && id !== \'undefined\' && id !== \'f_page_length\' && id !== \'f_search\' && id !== \'f_order\') {
             var $element = $("#" + id);
             console.log("[songs] Applico filtro", id, "=", filters[id], "Elemento trovato:", $element.length);
             if ($element.length > 0) {
@@ -283,15 +311,19 @@ function loadFiltersFromSession(callback) {
           }
         }
         
-        // Applica il limite di paginazione (righe per pagina) — valore sempre stringa per la select
-        if (filters.f_page_length !== undefined && filters.f_page_length !== null && filters.f_page_length !== \'\') {
-          var $pl = $("#f_page_length");
-          var lenStr = String(filters.f_page_length);
-          if ($pl.length) {
-            $pl.val(lenStr);
+        // Applica il limite di paginazione (righe per pagina), ordinamento e ricerca
+        var dt = $("#dataTable-'.$tableId.'").DataTable();
+        if (dt) {
+          var pageLen = 50;
+          if (filters.f_page_length !== undefined && filters.f_page_length !== null && filters.f_page_length !== \'\') {
+            var lenStr = String(filters.f_page_length);
+            $("#f_page_length").val(lenStr);
+            pageLen = (lenStr === "-1" || lenStr === "tutte") ? -1 : (parseInt(lenStr, 10) || 50);
           }
-          var pageLen = (lenStr === "-1" || lenStr === "tutte") ? -1 : (parseInt(lenStr, 10) || 50);
-          table.page.len(pageLen).draw();
+          dt.page.len(pageLen);
+          if (filters.f_order && Array.isArray(filters.f_order) && filters.f_order.length) dt.order(filters.f_order);
+          if (filters.f_search !== undefined && filters.f_search !== null) dt.search(String(filters.f_search));
+          dt.draw();
         }
         
         if (filtersApplied) {
@@ -327,7 +359,8 @@ function loadFiltersFromSession(callback) {
         filtersRestoredFromSession = false; // Nessun filtro da ripristinare
         // Default: select Righe a 50 e tabella a 50 righe
         $("#f_page_length").val("50");
-        table.page.len(50).draw();
+        var dt = $("#dataTable-'.$tableId.'").DataTable();
+        if (dt) { dt.page.len(50); dt.search(\'\'); dt.draw(); }
         if (typeof callback === \'function\') {
           callback(false);
         }
@@ -508,6 +541,10 @@ $(document).ready(function() {
       var len = (val === "-1") ? -1 : (parseInt(val, 10) || 50);
       table.page.len(len).draw();
       saveFiltersToSession();
+    });
+    // Salva in sessione quando cambiano ordinamento (click su colonna) o ricerca
+    table.on("order.dt search.dt", function() {
+      setTimeout(saveFiltersToSession, 300);
     });
   }
 
@@ -703,8 +740,10 @@ $(document).ready(function() {
     $("#f_diritti").val("*");
     // Reset la multiselect format
     $("#f_format option").prop("selected", false);
-    // Reset righe per pagina
+    // Reset righe per pagina, ordinamento (ID asc) e ricerca
     $("#f_page_length").val("50");
+    table.search("");
+    table.order([[1, "asc"]]); // colonna ID
     table.page.len(50).draw();
     updateFormatDisplay();
     // Rimuovi i filtri dalla sessione PHP lato applicazione
@@ -719,6 +758,15 @@ $(document).ready(function() {
     reloadTable()
   });
 
+  var pendingScrollToSongId = null;
+  function reloadTableAndGoToSong(songId) {
+    if (songId && songId !== \'\' && songId !== \'nuova\') {
+      pendingScrollToSongId = parseInt(songId, 10) || songId;
+    }
+    reloadTable();
+  }
+  window.reloadTableAndGoToSong = reloadTableAndGoToSong;
+  window.reloadTable = reloadTable;
   function reloadTable(){
     // Gestisci i format multipli
     var formatValues = [];
@@ -749,11 +797,37 @@ $(document).ready(function() {
     
     var reloadTable="https://yourradio.org/api/songs?"+formatQuery+"attivo="+$("#f_abilitate").val()+"&nazionalita="+$("#f_nazionalita").val()+"&strategia="+$("#f_strategia").val()+"&sex="+$("#f_sex").val()+"&umore="+$("#f_umore").val()+"&ritmo="+$("#f_ritmo").val()+"&energia="+$("#f_energia").val()+annoDalParam+annoAlParam+"&periodo="+$("#f_periodo").val()+"&genere="+$("#f_genere").val()+dirittiQuery;
 
+    $("#songs-table-loading").show();
+    table.one("xhr.dt", function() { $("#songs-table-loading").hide(); });
     table.ajax.url( reloadTable ).load(function() {
-      // Ripristina il numero di righe dalla select dopo ogni reload
+      var dt = $("#dataTable-'.$tableId.'").DataTable();
+      if (!dt) return;
       var lenVal = $("#f_page_length").val();
       var pl = (lenVal === "-1") ? -1 : (parseInt(lenVal, 10) || 50);
-      table.page.len(pl).draw();
+      dt.page.len(pl).draw();
+      if (pendingScrollToSongId) {
+        var row = dt.row(\'#\' + pendingScrollToSongId);
+        var rowNode = row.node();
+        if (rowNode) {
+          var idx = row.index();
+          if (idx !== undefined && idx >= 0) {
+            var pageLen = dt.page.len();
+            var pageIndex = Math.floor(idx / pageLen);
+            dt.page(pageIndex).draw(false);
+            setTimeout(function() {
+              var node = dt.row(\'#\' + pendingScrollToSongId).node();
+              if (node) {
+                node.scrollIntoView({ behavior: \'smooth\', block: \'nearest\' });
+                $(".rowPingMonitor").css("background-color", "transparent");
+                $(node).css("background-color", "#9e9e9e5e");
+              }
+              pendingScrollToSongId = null;
+            }, 200);
+            return;
+          }
+        }
+        pendingScrollToSongId = null;
+      }
     });
   }
 

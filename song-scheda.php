@@ -723,30 +723,31 @@ $(document).on("click", "#uploadFile", function (e) {
     // Nascondi il player
     $("#form-row-audio-player").hide();
     
-    // Ripristina il titolo nella pagina parent (songs.php) se siamo in un iframe
-    // Altrimenti, se la scheda è caricata dinamicamente, il titolo viene gestito da songs.php
+    var songId = $("#sg_id").val();
+    var win = (window.parent && window.parent !== window) ? window.parent : (window.top || window);
+    if (songId && songId !== '' && songId !== 'nuova' && typeof win.reloadTableAndGoToSong === 'function') {
+      win.reloadTableAndGoToSong(songId);
+    } else if (typeof win.reloadTable === 'function') {
+      win.reloadTable();
+    }
+    
     var titleHtml = '<span class="avatar avatar-sm mt-2"><span class="fe fe-music fe-20"></span> Songs</span>';
     
     if (window.parent && window.parent !== window && window.parent.$) {
       window.parent.$(".page-title").html(titleHtml);
-      // Chiudi la scheda nella pagina parent
       window.parent.$(".songs-table").fadeIn( "fast", function() {
         window.parent.$(".song-scheda").fadeOut( "fast");
       });
     } else {
-      // Se non siamo in un iframe, chiudi normalmente (la scheda è caricata dinamicamente)
-      // Cerca nella pagina parent se esiste
       var $parentSongsTable = window.top && window.top.$ ? window.top.$(".songs-table") : null;
       var $parentSongScheda = window.top && window.top.$ ? window.top.$(".song-scheda") : null;
       
       if ($parentSongsTable && $parentSongsTable.length > 0) {
-        // Siamo in un iframe, usa la pagina parent
         window.top.$(".page-title").html(titleHtml);
         $parentSongsTable.fadeIn( "fast", function() {
           $parentSongScheda.fadeOut( "fast");
         });
       } else {
-        // Prova a cercare nella stessa pagina
         var $songsTable = $(".songs-table");
         var $songScheda = $(".song-scheda");
         if ($songsTable.length > 0) {
@@ -1053,15 +1054,15 @@ $(document).on("click", "#uploadFile", function (e) {
     console.log("[updateButtonVisibility] Pulsanti trovati - Delete:", $btnDelete.length, "Upload:", $btnUpload.length);
     
     if (songId && songId !== '' && songId !== 'nuova') {
-      // Mostra i pulsanti CANCELLA e UPLOAD
+      // Song esistente: mostra CANCELLA e UPLOAD
       console.log("[updateButtonVisibility] Mostro i pulsanti CANCELLA e UPLOAD");
       $btnDelete.show();
-      $btnUpload.show();
+      $btnUpload.show().prop("disabled", false);
     } else {
-      // Nascondi i pulsanti CANCELLA e UPLOAD
-      console.log("[updateButtonVisibility] Nascondo i pulsanti CANCELLA e UPLOAD");
+      // Nuova song: nascondi solo CANCELLA, mostra comunque UPLOAD (visibile ma da usare dopo il salvataggio)
+      console.log("[updateButtonVisibility] Nuova song: nascondo CANCELLA, mostro UPLOAD");
       $btnDelete.hide();
-      $btnUpload.hide();
+      $btnUpload.show().prop("disabled", false);
     }
   }
   
@@ -1187,9 +1188,9 @@ $(document).on("click", "#uploadFile", function (e) {
               // Aggiorna il campo nascosto con il nuovo ID
               $("#sg_id").val(newId);
               
-              // Mostra i pulsanti CANCELLA e UPLOAD ora che abbiamo un ID valido
+              // Mostra e abilita subito i pulsanti CANCELLA e UPLOAD ora che abbiamo un ID valido
               $("#btnDelete").show();
-              $("#btnUpload").show();
+              $("#btnUpload").show().prop("disabled", false);
 
               // Se esiste reloadTable nel parent, aggiorna la lista in background
               try {
@@ -1283,8 +1284,9 @@ $(document).on("click", "#uploadFile", function (e) {
                     console.error("[updateSong] Errore nel mostrare la modale di avviso:", e);
                   }
                   
-                  // Chiudi il modal di conferma salvataggio
+                  // Chiudi il modal di conferma salvataggio e riabilita il bottone
                   $("#updateModal").modal("hide");
+                  $("#updateSong").prop("disabled", false).text("Salva");
                 },
                 error: function(xhr, status, error) {
                   console.error("[updateSong] Errore nel ricaricamento dati:", error);
@@ -1299,6 +1301,7 @@ $(document).on("click", "#uploadFile", function (e) {
                     console.error("[updateSong] Errore nel mostrare la modale di avviso:", e);
                   }
                   $("#updateModal").modal("hide");
+                  $("#updateSong").prop("disabled", false).text("Salva");
                 }
               });
               
@@ -1363,23 +1366,31 @@ $(document).on("click", "#uploadFile", function (e) {
               },
               error: function(xhr, status, error) {
                 console.error("[updateSong] Errore nel ricaricamento dati:", error);
+                $("#updateSong").prop("disabled", false).text("Salva");
               }
             });
+          } else {
+            // Update senza ricaricamento dati: chiudi subito e riabilita
+            $("#updateModal").modal("hide");
+            $("#updateSong").prop("disabled", false).text("Salva");
           }
         } else {
           console.error("[updateSong] Risposta non di successo:", response);
           alert("Errore durante il salvataggio: " + (response.message || "Errore sconosciuto"));
         }
-        // Riabilita il bottone
+        // Riabilita sempre il bottone e chiudi il modal (sicurezza)
         $("#updateSong").prop("disabled", false).text("Salva");
       },
       error: function (jqxhr, status, errorMessage) {
         console.error("[updateSong] Errore:", errorMessage, jqxhr);
         console.error("[updateSong] Dettagli errore:", jqxhr.responseText);
         alert("Errore durante il salvataggio: " + errorMessage);
-        // In caso di errore, chiudi comunque il modal
         $("#updateModal").modal("hide");
-        // Riabilita il bottone
+        $("#updateSong").prop("disabled", false).text("Salva");
+      },
+      complete: function() {
+        // In ogni caso (successo, errore, eccezione) sblocca modale e bottone
+        $("#updateModal").modal("hide");
         $("#updateSong").prop("disabled", false).text("Salva");
       }
     });
