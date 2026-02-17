@@ -1075,14 +1075,13 @@ $(document).on("click", "#uploadFile", function (e) {
     
     if (songId && songId !== '' && songId !== 'nuova') {
       $btnDelete.show();
+      if (hasFile) $downloadFile.show(); else $downloadFile.hide();
       if (hasTitoloArtista) {
         $btnSalva.show().prop("disabled", false);
         $btnUpload.show().prop("disabled", false);
-        if (hasFile) $downloadFile.show(); else $downloadFile.hide();
       } else {
         $btnSalva.hide().prop("disabled", true);
         $btnUpload.hide();
-        $downloadFile.hide();
       }
     } else {
       $btnDelete.hide();

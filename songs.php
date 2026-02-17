@@ -149,8 +149,16 @@ $tables.='
         </button>
       </div>
       <div class="modal-body">
-        <p class="mb-3">Carica il file audio MP3. Verrà assegnato il prossimo numero disponibile e verrà creata una scheda vuota da compilare.</p>
+        <p class="mb-3">Carica il file audio MP3 e inserisci titolo e autore. Verrà creata la scheda con file e dati compilati.</p>
         <form id="formNuovaSongUpload">
+          <div class="form-group">
+            <label for="nuovaSongTitolo">Titolo</label>
+            <input type="text" class="form-control" id="nuovaSongTitolo" name="sg_titolo" placeholder="Titolo">
+          </div>
+          <div class="form-group">
+            <label for="nuovaSongArtista">Autore</label>
+            <input type="text" class="form-control" id="nuovaSongArtista" name="sg_artista" placeholder="Autore">
+          </div>
           <div class="form-group">
             <label for="nuovaSongFileInput">File MP3</label>
             <input type="file" class="form-control-file" id="nuovaSongFileInput" name="file" accept=".mp3,audio/mpeg" required>
@@ -164,7 +172,7 @@ $tables.='
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Annulla</button>
-        <button type="button" class="btn btn-primary" id="nuovaSongCaricaBtn">Carica e apri scheda</button>
+        <button type="button" class="btn btn-primary" id="nuovaSongCaricaBtn" disabled>Carica e apri scheda</button>
       </div>
     </div>
   </div>
@@ -695,10 +703,20 @@ $(document).ready(function() {
     });
   });
 
+  // Abilita "Carica e apri scheda" solo se Titolo e Autore sono valorizzati
+  function updateNuovaSongCaricaBtn() {
+    var titolo = ($("#nuovaSongTitolo").val() || "").trim();
+    var artista = ($("#nuovaSongArtista").val() || "").trim();
+    $("#nuovaSongCaricaBtn").prop("disabled", titolo === "" || artista === "");
+  }
+  $("#nuovaSongTitolo, #nuovaSongArtista").on("input change", updateNuovaSongCaricaBtn);
   // Handler per il pulsante "Nuova Song": apri modale per caricare file
   $("#nuovaSongBtn").on("click", function(){
     $("#nuovaSongFileInput").val("");
+    $("#nuovaSongTitolo").val("");
+    $("#nuovaSongArtista").val("");
     $("#nuovaSongUploadError").hide().text("");
+    $("#nuovaSongCaricaBtn").prop("disabled", true);
     $("#modalNuovaSong").modal("show");
   });
   $("#nuovaSongCaricaBtn").on("click", function(){
@@ -720,6 +738,8 @@ $(document).ready(function() {
     $progress.show();
     var formData = new FormData();
     formData.append("file", file);
+    formData.append("sg_titolo", ($("#nuovaSongTitolo").val() || "").trim());
+    formData.append("sg_artista", ($("#nuovaSongArtista").val() || "").trim());
     $.ajax({
       url: "https://yourradio.org/api/songs/new-with-file",
       method: "POST",

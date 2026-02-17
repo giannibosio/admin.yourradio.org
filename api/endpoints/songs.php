@@ -355,7 +355,9 @@ function handleSongsRequest($method, $action, $id, $data) {
                 if (!is_writable($remoteDir)) {
                     sendErrorResponse("Directory non scrivibile", 500);
                 }
-                if (!rewriteMp3Metadata($tmpPath, '', '', '', 'YourRadio')) {
+                $sgTitolo = isset($_POST['sg_titolo']) ? trim((string)$_POST['sg_titolo']) : '';
+                $sgArtista = isset($_POST['sg_artista']) ? trim((string)$_POST['sg_artista']) : '';
+                if (!rewriteMp3Metadata($tmpPath, $sgTitolo, $sgArtista, '', 'YourRadio')) {
                     sendErrorResponse("Impossibile riscrivere metadati MP3", 500);
                 }
                 if (!move_uploaded_file($tmpPath, $remotePath)) {
@@ -367,8 +369,8 @@ function handleSongsRequest($method, $action, $id, $data) {
                     'sg_file' => (string)$nextFile,
                     'sg_filesize' => $fileSize,
                     'sg_attivo' => 0,
-                    'sg_titolo' => '',
-                    'sg_artista' => '',
+                    'sg_titolo' => $sgTitolo,
+                    'sg_artista' => $sgArtista,
                     'sg_anno' => 0,
                     'sg_artista2' => '',
                     'sg_artista3' => '',
