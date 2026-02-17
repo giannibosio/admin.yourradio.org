@@ -307,6 +307,85 @@ function handleSongsRequest($method, $action, $id, $data) {
                     'already_existed' => $alreadyExisted,
                     'total' => count($songIds)
                 ], "Abbinamento completato");
+            } elseif ($id === null && $action === 'new-with-file') {
+                // Nuova song da file: prossimo sg_file e prossimo sg_id dalla tabella songs, poi upload e INSERT
+                if (!isset($_FILES['file']) || empty($_FILES['file']['tmp_name'])) {
+                    sendErrorResponse("Nessun file ricevuto", 400);
+                }
+                if ($_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                    $errMsg = array(
+                        UPLOAD_ERR_INI_SIZE => 'File troppo grande',
+                        UPLOAD_ERR_FORM_SIZE => 'File troppo grande',
+                        UPLOAD_ERR_PARTIAL => 'Upload parziale',
+                        UPLOAD_ERR_NO_FILE => 'Nessun file',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Directory temp mancante',
+                        UPLOAD_ERR_CANT_WRITE => 'Impossibile scrivere',
+                        UPLOAD_ERR_EXTENSION => 'Upload bloccato'
+                    );
+                    sendErrorResponse(isset($errMsg[$_FILES['file']['error']]) ? $errMsg[$_FILES['file']['error']] : 'Errore upload', 400);
+                }
+                $tmpPath = $_FILES['file']['tmp_name'];
+                if (!file_exists($tmpPath)) {
+                    sendErrorResponse("File temporaneo non trovato", 400);
+                }
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if ($ext !== 'mp3') {
+                    sendErrorResponse("Il file deve essere MP3", 400);
+                }
+                try {
+                    $stFile = Songs::$db->query("SELECT `sg_file`, `sg_id` FROM `songs` ORDER BY `sg_file` DESC LIMIT 1");
+                    $rowFile = $stFile ? $stFile->fetch(PDO::FETCH_ASSOC) : false;
+                    $nextFile = ($rowFile && isset($rowFile['sg_file']) && $rowFile['sg_file'] !== null) ? (int)$rowFile['sg_file'] + 1 : 1;
+                    $stId = Songs::$db->query("SELECT `sg_id` FROM `songs` ORDER BY `sg_id` DESC LIMIT 1");
+                    $rowId = $stId ? $stId->fetch(PDO::FETCH_ASSOC) : false;
+                    $nextSgId = ($rowId && isset($rowId['sg_id']) && $rowId['sg_id'] !== null) ? (int)$rowId['sg_id'] + 1 : 1;
+                } catch (Exception $e) {
+                    sendErrorResponse("Errore nel recupero prossimi ID: " . $e->getMessage(), 500);
+                }
+                $remoteDir = (defined('SONG_PATH') && SONG_PATH !== '/path/to/player/song/')
+                    ? rtrim(SONG_PATH, '/')
+                    : $_SERVER['DOCUMENT_ROOT'] . '/player/song';
+                $newFilename = $nextFile . '.mp3';
+                $remotePath = $remoteDir . '/' . $newFilename;
+                if (!is_dir($remoteDir)) {
+                    if (!mkdir($remoteDir, 0755, true)) {
+                        sendErrorResponse("Impossibile creare la directory", 500);
+                    }
+                }
+                if (!is_writable($remoteDir)) {
+                    sendErrorResponse("Directory non scrivibile", 500);
+                }
+                if (!rewriteMp3Metadata($tmpPath, '', '', '', 'YourRadio')) {
+                    sendErrorResponse("Impossibile riscrivere metadati MP3", 500);
+                }
+                if (!move_uploaded_file($tmpPath, $remotePath)) {
+                    sendErrorResponse("Errore nel salvataggio del file", 500);
+                }
+                $fileSize = file_exists($remotePath) ? filesize($remotePath) : 0;
+                $emptySong = array(
+                    'sg_id' => $nextSgId,
+                    'sg_file' => (string)$nextFile,
+                    'sg_filesize' => $fileSize,
+                    'sg_attivo' => 0,
+                    'sg_titolo' => '',
+                    'sg_artista' => '',
+                    'sg_anno' => 0,
+                    'sg_artista2' => '',
+                    'sg_artista3' => '',
+                    'sg_diritti' => 0,
+                    'sg_autori' => '',
+                    'sg_casaDiscografica' => '',
+                    'sg_etichetta' => '',
+                    'sg_umoreId' => 0,
+                    'sg_nazione' => '',
+                    'formats' => array()
+                );
+                $newId = Songs::createSong($emptySong);
+                if (!$newId) {
+                    sendErrorResponse("Errore nella creazione della song", 500);
+                }
+                $song = Songs::selectSongById($newId);
+                sendSuccessResponse($song[0], "Song creata con file", 201);
             } elseif ($id === null && $action === '') {
                 // Crea nuova song
                 $newId = Songs::createSong($data);

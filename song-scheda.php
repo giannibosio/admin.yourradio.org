@@ -298,19 +298,19 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
     <input name="formAction" id="formAction" type="hidden" value="<?=isset($_POST["formAction"]) ? $_POST["formAction"] : ''?>" >
     
 
-    <!-- Button bar -->
+    <!-- Button bar: LISTA e CANCELLA sempre visibili per song esistente; SALVA/UPLOAD/DOWNLOAD abilitati solo con titolo e autore -->
     <div class="button-bar">
       <button type="button" title="torna alla lista" class="btn btn-outline-success chiudiSchedaSong"><span class="fe fe-list fe-16"></span></button>
       <span class="fe fe-tool fe-16"> </span>
       
-      <button type="button" title="SALVA" class="btn btn-outline-danger" data-toggle="modal" data-target="#updateModal"><span class="fe fe-save fe-16"></span></button>
+      <button type="button" title="SALVA" class="btn btn-outline-danger" id="btnSalva" data-toggle="modal" data-target="#updateModal" style="display:none;"><span class="fe fe-save fe-16"></span></button>
       
       <button title="CANCELLA" type="button" class="btn btn-outline-danger" id="btnDelete" data-toggle="modal" data-target="#verticalModal" style="display:none;"><span class="fe fe-trash fe-16"></span></button>
       
       <button title="UPLOAD" type="button" class="btn btn-outline-primary" id="btnUpload" data-toggle="modal" data-target="#uploadModal" style="display:none;"><span class="fe fe-upload fe-16"></span></button>
 
       
-      <button style="<?php echo (!$file_audio_ok) ? 'display:none;' : ''?>" title="DOWNLOAD file" type="button" class="btn btn-outline-primary" id="downloadFile"><span class="fe fe-play fe-16"></span></button>
+      <button style="display:none;" title="DOWNLOAD file" type="button" class="btn btn-outline-primary" id="downloadFile"><span class="fe fe-play fe-16"></span></button>
 
 
     </div>
@@ -1038,6 +1038,7 @@ $(document).on("click", "#uploadFile", function (e) {
             updateFormats();
           }
           console.log("[loadSongData] Form aggiornato con i dati più recenti");
+          if (typeof updateButtonVisibility === "function") updateButtonVisibility();
         }
       },
       error: function(xhr, status, error) {
@@ -1062,21 +1063,32 @@ $(document).on("click", "#uploadFile", function (e) {
       }
     }
     
-    console.log("[updateButtonVisibility] Song ID:", songId);
+    var titolo = $.trim($("#sg_titolo").val() || "");
+    var artista = $.trim($("#sg_artista").val() || "");
+    var hasTitoloArtista = titolo !== "" && artista !== "";
+    var hasFile = $("#sg_file").val() && $("#sg_file").val() !== "" && $("#sg_file").val() !== "0";
+    
     var $btnDelete = $("#btnDelete");
+    var $btnSalva = $("#btnSalva");
     var $btnUpload = $("#btnUpload");
-    console.log("[updateButtonVisibility] Pulsanti trovati - Delete:", $btnDelete.length, "Upload:", $btnUpload.length);
+    var $downloadFile = $("#downloadFile");
     
     if (songId && songId !== '' && songId !== 'nuova') {
-      // Song esistente: mostra CANCELLA e UPLOAD
-      console.log("[updateButtonVisibility] Mostro i pulsanti CANCELLA e UPLOAD");
       $btnDelete.show();
-      $btnUpload.show().prop("disabled", false);
+      if (hasTitoloArtista) {
+        $btnSalva.show().prop("disabled", false);
+        $btnUpload.show().prop("disabled", false);
+        if (hasFile) $downloadFile.show(); else $downloadFile.hide();
+      } else {
+        $btnSalva.hide().prop("disabled", true);
+        $btnUpload.hide();
+        $downloadFile.hide();
+      }
     } else {
-      // Nuova song: nascondi solo CANCELLA, mostra comunque UPLOAD (visibile ma da usare dopo il salvataggio)
-      console.log("[updateButtonVisibility] Nuova song: nascondo CANCELLA, mostro UPLOAD");
       $btnDelete.hide();
-      $btnUpload.show().prop("disabled", false);
+      $btnSalva.hide();
+      $btnUpload.hide();
+      $downloadFile.hide();
     }
   }
   
@@ -1438,6 +1450,10 @@ $(document).on("click", "#uploadFile", function (e) {
       } else {
         $("#form-row-alert-disattivo").show();
       }
+    });
+    // Aggiorna visibilità pulsanti (SALVA abilitato solo con titolo e autore) quando cambiano titolo/artista
+    $(document).on("input change", "#sg_titolo, #sg_artista", function() {
+      if (typeof updateButtonVisibility === "function") updateButtonVisibility();
     });
   });
 } // Fine di initSongSchedaScripts

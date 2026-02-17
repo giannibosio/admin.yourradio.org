@@ -138,6 +138,37 @@ $tables.='
     </table>
   </div>
 </div>
+<!-- Modale Nuova Song: carica file -->
+<div class="modal fade" id="modalNuovaSong" tabindex="-1" role="dialog" aria-labelledby="modalNuovaSongTitle" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNuovaSongTitle">Nuova Song</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Chiudi">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">Carica il file audio MP3. Verrà assegnato il prossimo numero disponibile e verrà creata una scheda vuota da compilare.</p>
+        <form id="formNuovaSongUpload">
+          <div class="form-group">
+            <label for="nuovaSongFileInput">File MP3</label>
+            <input type="file" class="form-control-file" id="nuovaSongFileInput" name="file" accept=".mp3,audio/mpeg" required>
+          </div>
+          <div id="nuovaSongUploadProgress" class="mb-2" style="display: none;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <span class="ml-2">Caricamento in corso...</span>
+          </div>
+          <div id="nuovaSongUploadError" class="alert alert-danger mt-2" style="display: none;" role="alert"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Annulla</button>
+        <button type="button" class="btn btn-primary" id="nuovaSongCaricaBtn">Carica e apri scheda</button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Modale Abbina al format -->
 <div class="modal fade" id="modalAbbinaFormat" tabindex="-1" role="dialog" aria-labelledby="modalAbbinaFormatTitle" aria-hidden="true">
   <div class="modal-dialog" role="document">
@@ -664,10 +695,56 @@ $(document).ready(function() {
     });
   });
 
-  // Handler per il pulsante "Nuova Song"
+  // Handler per il pulsante "Nuova Song": apri modale per caricare file
   $("#nuovaSongBtn").on("click", function(){
-    console.log("Apro nuova song");
-    openSong("nuova");
+    $("#nuovaSongFileInput").val("");
+    $("#nuovaSongUploadError").hide().text("");
+    $("#modalNuovaSong").modal("show");
+  });
+  $("#nuovaSongCaricaBtn").on("click", function(){
+    var $input = $("#nuovaSongFileInput");
+    if (!$input[0].files || !$input[0].files.length) {
+      $("#nuovaSongUploadError").text("Seleziona un file MP3").show();
+      return;
+    }
+    var file = $input[0].files[0];
+    if (!file.name || !file.name.toLowerCase().endsWith(".mp3")) {
+      $("#nuovaSongUploadError").text("Il file deve essere in formato MP3").show();
+      return;
+    }
+    var $btn = $(this);
+    var $progress = $("#nuovaSongUploadProgress");
+    var $err = $("#nuovaSongUploadError");
+    $err.hide();
+    $btn.prop("disabled", true);
+    $progress.show();
+    var formData = new FormData();
+    formData.append("file", file);
+    $.ajax({
+      url: "https://yourradio.org/api/songs/new-with-file",
+      method: "POST",
+      processData: false,
+      contentType: false,
+      data: formData,
+      success: function(response) {
+        if (response.success && response.data && response.data.sg_id) {
+          $("#modalNuovaSong").modal("hide");
+          $progress.hide();
+          $btn.prop("disabled", false);
+          openSong(response.data.sg_id);
+        } else {
+          $err.text(response.error && response.error.message ? response.error.message : "Errore nella creazione").show();
+          $btn.prop("disabled", false);
+          $progress.hide();
+        }
+      },
+      error: function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore di rete o server";
+        $err.text(msg).show();
+        $btn.prop("disabled", false);
+        $progress.hide();
+      }
+    });
   });
 
   // Funzione per aggiornare la visualizzazione dei format selezionati
