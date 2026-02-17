@@ -842,24 +842,27 @@ $(document).ready(function() {
         $(".song-scheda").load("song-scheda.php?id="+id+cacheBuster, function(responseTxt, statusTxt, xhr){
           if(statusTxt == "success") {
             console.log("[songs.php] Song caricata con successo, ID:", id);
+            // Se abbiamo aperto \"nuova\", forza sg_id a \"nuova\" (evita cache che riporta l\'ultima song) e non chiamare loadSongData
+            if (id === \'nuova\' || id === \'\') {
+              $(".song-scheda").find("#sg_id").val("nuova");
+            }
             // Verifica che il contenuto sia stato caricato correttamente
             if ($(".song-scheda").html().indexOf("scheda-song") === -1) {
               console.error("[songs.php] Il contenuto non sembra essere stato caricato correttamente");
             }
-            // Forza il caricamento dei dati aggiornati dall API dopo che la pagina è stata caricata
-            setTimeout(function() {
-              if (typeof loadSongData === \'function\') {
-                console.log("[songs.php] Chiamo loadSongData per aggiornare i dati");
-                loadSongData();
-              } else {
-                console.log("[songs.php] loadSongData non disponibile, riprovo tra 200ms");
-                setTimeout(function() {
-                  if (typeof loadSongData === \'function\') {
-                    loadSongData();
-                  }
-                }, 200);
-              }
-            }, 150);
+            // Forza il caricamento dei dati dall\'API solo se NON è \"nuova\" (altrimenti si rischia di caricare l\'ultima song per cache)
+            if (id !== \'nuova\' && id !== \'\') {
+              setTimeout(function() {
+                if (typeof loadSongData === \'function\') {
+                  console.log("[songs.php] Chiamo loadSongData per aggiornare i dati");
+                  loadSongData();
+                } else {
+                  setTimeout(function() {
+                    if (typeof loadSongData === \'function\') loadSongData();
+                  }, 200);
+                }
+              }, 150);
+            }
             // Forza il caricamento dei format dopo che la pagina è stata caricata
             // Prova più volte perché il codice potrebbe non essere ancora eseguito
             var retryCount = 0;

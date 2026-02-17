@@ -19,6 +19,11 @@ try {
 }
 
 $songId = $_GET["id"] ?? '';
+// Evita cache quando si apre "nuova" (altrimenti il browser può riportare l'ultima song aperta)
+if ($songId === '' || $songId === 'nuova' || $songId === '0') {
+  header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+  header("Pragma: no-cache");
+}
 // Se l'ID è 'nuova' o vuoto, non chiamare selectSongById
 if($songId === '' || $songId === 'nuova' || $songId === '0') {
     $s = [['sg_file' => '', 'sg_filesize' => '', 'sg_titolo' => '', 'sg_artista' => '', 'sg_anno' => '', 'sg_artista2' => '', 'sg_artista3' => '', 'sg_diritti' => '', 'sg_autori' => '', 'sg_casaDiscografica' => '', 'sg_etichetta' => '', 'sg_umoreId' => '', 'sg_nazione' => '', 'sg_id' => '', 'sg_attivo' => 0]];
