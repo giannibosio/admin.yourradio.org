@@ -470,16 +470,22 @@ function handleSongsRequest($method, $action, $id, $data) {
                     sendErrorResponse("File temporaneo non trovato: " . $tmpPath, 400);
                 }
                 
-                // Genera un nome file basato sull'ID della song
+                // Nome file: SOLO sg_file della scheda. Upload da song-scheda sovrascrive il file già presente con lo stesso nome.
                 $fileExtension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
                 if ($fileExtension !== 'mp3') {
                     sendErrorResponse("Il file deve essere in formato MP3 (ricevuto: " . $fileExtension . ")", 400);
                 }
                 
-                $newFilename = $id . '.mp3';
+                $songRow = Songs::selectSongById($id);
+                $songData = !empty($songRow) ? $songRow[0] : array();
+                $sgFileVal = isset($songData['sg_file']) ? $songData['sg_file'] : null;
+                if ($sgFileVal === null || $sgFileVal === '') {
+                    sendErrorResponse("La scheda non ha un nome file (sg_file) impostato. Impossibile caricare.", 400);
+                }
+                $sgFile = (string)$sgFileVal;
+                $newFilename = $sgFile . '.mp3';
                 
                 // Percorso di destinazione sul server remoto
-                // Il percorso assoluto sul server esterno: /player/song/ (non /player/song/test/)
                 $remotePath = $_SERVER['DOCUMENT_ROOT'] . '/player/song/' . $newFilename;
                 $remoteDir = dirname($remotePath);
                 
@@ -494,10 +500,6 @@ function handleSongsRequest($method, $action, $id, $data) {
                 if (!is_writable($remoteDir)) {
                     sendErrorResponse("La directory di destinazione non è scrivibile: " . $remoteDir, 500);
                 }
-                
-                // Recupera dalla song in DB titolo, autore, anno per i metadati MP3
-                $songRow = Songs::selectSongById($id);
-                $songData = !empty($songRow) ? $songRow[0] : array();
                 $metaTitle  = isset($songData['sg_titolo'])  ? trim((string)$songData['sg_titolo'])  : '';
                 $metaArtist = isset($songData['sg_artista']) ? trim((string)$songData['sg_artista']) : '';
                 $metaYear   = isset($songData['sg_anno'])    ? trim((string)$songData['sg_anno'])    : '';
@@ -528,13 +530,13 @@ function handleSongsRequest($method, $action, $id, $data) {
                     sendErrorResponse("Impossibile calcolare la dimensione del file salvato: " . $remotePath, 500);
                 }
                 
-                // Aggiorna il database con il nome del file e il filesize
+                // Aggiorna il database con il nome del file (sg_file) e il filesize
                 try {
                     // Prima verifica se esiste già una song (diversa da questa) con lo stesso sg_file
                     $checkQuery = "SELECT `sg_id` FROM `songs` WHERE `sg_file` = :filename AND `sg_id` != :id";
                     $checkSt = Songs::$db->prepare($checkQuery);
                     $checkSt->execute(array(
-                        ':filename' => $id,
+                        ':filename' => $sgFile,
                         ':id' => $id
                     ));
                     $existingSong = $checkSt->fetch();
@@ -546,11 +548,11 @@ function handleSongsRequest($method, $action, $id, $data) {
                         $clearSt->execute(array(':other_id' => $existingSong['sg_id']));
                     }
                     
-                    // Ora aggiorna questa song con il nuovo sg_file e sg_filesize
+                    // Ora aggiorna questa song con sg_file (nome file senza estensione) e sg_filesize
                     $updateQuery = "UPDATE `songs` SET `sg_file` = :filename, `sg_filesize` = :filesize WHERE `sg_id` = :id";
                     $updateSt = Songs::$db->prepare($updateQuery);
                     $result = $updateSt->execute(array(
-                        ':filename' => $id,
+                        ':filename' => $sgFile,
                         ':filesize' => $fileSize,
                         ':id' => $id
                     ));

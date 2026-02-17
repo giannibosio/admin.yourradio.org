@@ -561,7 +561,7 @@ $(document).on("click", "#downloadFile", function () {
     return;
   }
   
-  var audioUrl = "https://yourradio.org/player/song/" + filename + ".mp3";
+  var audioUrl = "https://yourradio.org/player/song/" + filename + ".mp3?t=" + new Date().getTime();
   console.log("[downloadFile] Caricamento audio:", audioUrl);
   
   // Mostra il player audio nella pagina
