@@ -264,6 +264,13 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
       </div>
     </div>
 
+    <div class="form-row" id="form-row-alert-disattivo" style="<?php echo ($active == 1) ? 'display:none;' : ''?>">
+      <div class="col-md-12 mb-3"> 
+        <div class="alert alert-warning" role="alert">
+          <span class="fe fe-alert-triangle fe-16 mr-2"></span> Questa song è ancora inattesa di essere pubblicata! </div>
+      </div>
+    </div>
+
     <!-- Player audio frame -->
     <div class="form-row" id="form-row-audio-player" style="display:none;">
       <div class="col-md-12 mb-3">
@@ -996,8 +1003,10 @@ $(document).on("click", "#uploadFile", function (e) {
           if(data.sg_attivo !== undefined) {
             if(data.sg_attivo == 1) {
               $("#sg_attivo").prop("checked", true);
+              $("#form-row-alert-disattivo").hide();
             } else {
               $("#sg_attivo").prop("checked", false);
+              $("#form-row-alert-disattivo").show();
             }
           }
           // Aggiorna il titolo della pagina
@@ -1254,8 +1263,10 @@ $(document).on("click", "#uploadFile", function (e) {
                     if(data.sg_attivo !== undefined) {
                       if(data.sg_attivo == 1) {
                         $("#sg_attivo").prop("checked", true);
+                        $("#form-row-alert-disattivo").hide();
                       } else {
                         $("#sg_attivo").prop("checked", false);
+                        $("#form-row-alert-disattivo").show();
                       }
                     }
                     // Aggiorna anche i format se presenti
@@ -1345,8 +1356,10 @@ $(document).on("click", "#uploadFile", function (e) {
                   if(data.sg_attivo !== undefined) {
                     if(data.sg_attivo == 1) {
                       $("#sg_attivo").prop("checked", true);
+                      $("#form-row-alert-disattivo").hide();
                     } else {
                       $("#sg_attivo").prop("checked", false);
+                      $("#form-row-alert-disattivo").show();
                     }
                   }
                   // Aggiorna anche i format se presenti
@@ -1412,6 +1425,15 @@ $(document).on("click", "#uploadFile", function (e) {
     } else {
       console.warn("[song-scheda] Bottone updateSong NON trovato al document ready");
     }
+    
+    // Listener per aggiornare l'alert DISATTIVO quando cambia il checkbox
+    $(document).on("change", "#sg_attivo", function() {
+      if ($(this).is(":checked")) {
+        $("#form-row-alert-disattivo").hide();
+      } else {
+        $("#form-row-alert-disattivo").show();
+      }
+    });
   });
 } // Fine di initSongSchedaScripts
 
