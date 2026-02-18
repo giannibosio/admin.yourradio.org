@@ -149,7 +149,7 @@ $tables.='
         </button>
       </div>
       <div class="modal-body">
-        <p class="mb-3">Carica il file audio MP3 e inserisci titolo e autore. Verrà creata la scheda con file e dati compilati.</p>
+        <p class="mb-3">Inserisci Titolo e Artista e carica il file audio MP3. Verrà aperta la nuova scheda per la compilazione dei dati.</p>
         <form id="formNuovaSongUpload">
           <div class="form-group">
             <label for="nuovaSongTitolo">Titolo</label>
