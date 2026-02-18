@@ -156,8 +156,8 @@ $tables.='
             <input type="text" class="form-control" id="nuovaSongTitolo" name="sg_titolo" placeholder="Titolo">
           </div>
           <div class="form-group">
-            <label for="nuovaSongArtista">Autore</label>
-            <input type="text" class="form-control" id="nuovaSongArtista" name="sg_artista" placeholder="Autore">
+            <label for="nuovaSongArtista">Artista</label>
+            <input type="text" class="form-control" id="nuovaSongArtista" name="sg_artista" placeholder="Artista">
           </div>
           <div class="form-group">
             <label for="nuovaSongFileInput">File MP3</label>
