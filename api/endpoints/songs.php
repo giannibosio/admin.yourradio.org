@@ -234,7 +234,11 @@ function handleSongsRequest($method, $action, $id, $data) {
                     $filter['anno_dal'] = $annoDal;
                     $filter['anno_al']  = $annoAl;
                 }
-                if (isset($_GET['periodo'])) $filter['periodo'] = (int)$_GET['periodo'];
+                if (isset($_GET['periodo'])) {
+                    $periodoVal = (int)$_GET['periodo'];
+                    // -1 = "Nessuno" (solo song con sg_periodoId=0)
+                    $filter['periodo'] = $periodoVal;
+                }
                 if (isset($_GET['genere'])) $filter['genere'] = (int)$_GET['genere'];
                 // Gestisci diritti: aggiungi al filtro solo se è un valore numerico valido (non "*" o vuoto)
                 // Nota: il valore 0 (Siae) è valido e deve essere incluso nel filtro

@@ -420,9 +420,16 @@ class Songs extends DB
             $params[':anno_dal'] = $filter['anno_dal'];
             $params[':anno_al']  = $filter['anno_al'];
         }
-        if(isset($filter['periodo']) && $filter['periodo'] > 0){
-            $where[] = "sg_periodoId = :periodo";
-            $params[':periodo'] = $filter['periodo'];
+        if(isset($filter['periodo'])){
+            if($filter['periodo'] == -1){
+                // "Nessuno": solo song con sg_periodoId=0 (non assegnato)
+                $where[] = "sg_periodoId = 0";
+            } elseif($filter['periodo'] > 0){
+                // Periodo specifico (Estate=1, Natale=2, ecc.)
+                $where[] = "sg_periodoId = :periodo";
+                $params[':periodo'] = $filter['periodo'];
+            }
+            // Se periodo=0 (Tutti), non aggiungere filtro
         }
         if(isset($filter['genere']) && $filter['genere'] > 0){
             $where[] = "sg_genereId = :genere";

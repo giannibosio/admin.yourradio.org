@@ -253,6 +253,12 @@ function saveFiltersToSession() {
     filters.f_page_length = $pageLength.val() || "50";
   }
   
+  // Salva sempre f_diritti (anche se è "*" default) per mantenerlo in memoria
+  var $diritti = $("#f_diritti");
+  if ($diritti.length) {
+    filters.f_diritti = $diritti.val() || "*";
+  }
+  
   // Salva ordinamento e ricerca dalla DataTable (ID, righe, ricerca)
   var dt = $("#dataTable-'.$tableId.'").DataTable();
   if (dt) {
@@ -332,7 +338,8 @@ function loadFiltersFromSession(callback) {
                 if (filterValue !== undefined && filterValue !== null && filterValue !== \'\') {
                   // Converti a stringa se necessario per il confronto
                   var filterValueStr = String(filterValue);
-                  if (filterValueStr !== \'0\' && filterValueStr !== \'\') {
+                  // Per f_diritti, accetta anche "*" (Tutti)
+                  if (id === \'f_diritti\' || (filterValueStr !== \'0\' && filterValueStr !== \'\')) {
                     $element.val(filterValueStr);
                     filtersApplied = true;
                     appliedFilters.push($element);
@@ -348,6 +355,12 @@ function loadFiltersFromSession(callback) {
               console.warn("[songs] Elemento", id, "non trovato");
             }
           }
+        }
+        
+        // Applica f_diritti se presente (anche se è "*" default)
+        if (filters.f_diritti !== undefined && filters.f_diritti !== null) {
+          var dirittiVal = String(filters.f_diritti);
+          $("#f_diritti").val(dirittiVal);
         }
         
         // Applica il limite di paginazione (righe per pagina), ordinamento e ricerca

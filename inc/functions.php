@@ -266,7 +266,8 @@ class Utils
     	$sel .= '
     	<label class="songFilter_select">Periodo</label>
     	<select id="f_periodo" name="f_periodo" class="form-control songFilter_select">
-	    	<option value="0" selected="">Tutti</option>
+	    	<option value="0" selected="">Tutte le selezioni</option>
+	    	<option value="-1">Non selezionato</option>
 	    	<option value="1">Estate</option>
 	    	<option value="2">Natale</option>
 	    </select>
