@@ -246,19 +246,49 @@ if($active==1){$chbox_active="checked";$chbox_active_lab="Attivo";}else{$chbox_a
     </div>
     <div class="form-row">
       <div class="col-md-12 mb-3">
-        <label for="formats_select">Format</label>
-        <select class="form-control" id="formats_select" name="formats_select[]" multiple size="5">
-          <!-- I format verranno caricati dinamicamente dall'API -->
-        </select>
-        <small class="form-text text-muted">Clicca per selezionare/deselezionare. Tieni premuto Ctrl (o Cmd su Mac) per aggiungere/togliere più format</small>
-        <input type="hidden" id="formats" name="formats" value="">
-      </div>
-    </div>
-    
-    <div class="form-row">
-      <div class="col-md-12 mb-3">
-        <label for="formats_selected_display">Format Selezionati</label>
-        <input type="text" class="form-control" id="formats_selected_display" readonly placeholder="Nessun format selezionato">
+        <style>
+        #formats-table {
+          margin-bottom: 0;
+        }
+        #formats-table td {
+          padding: 0.5rem;
+          vertical-align: middle;
+        }
+        #formats-table label {
+          display: flex;
+          align-items: center;
+          margin-bottom: 0;
+          font-weight: normal;
+        }
+        #formats-table .format-checkbox {
+          margin-right: 0.5rem;
+          cursor: pointer;
+        }
+        </style>
+        <div class="accordion" id="accordionFormats">
+          <div class="card">
+            <div class="card-header" id="headingFormats">
+              <div class="d-flex align-items-center">
+                <button class="btn btn-sm btn-outline-primary mr-2" type="button" data-toggle="collapse" data-target="#collapseFormats" aria-expanded="false" aria-controls="collapseFormats">
+                  Format
+                </button>
+                <span id="formats-selected-names" class="text-muted small" style="color: white;">Nessun format selezionato</span>
+              </div>
+            </div>
+            <div id="collapseFormats" class="collapse" aria-labelledby="headingFormats" data-parent="#accordionFormats">
+              <div class="card-body">
+                <div id="formats-table-container">
+                  <table class="table table-sm table-bordered" id="formats-table">
+                    <tbody id="formats-table-body">
+                      <!-- I format verranno caricati dinamicamente dall'API -->
+                    </tbody>
+                  </table>
+                </div>
+                <input type="hidden" id="formats" name="formats" value="">
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -456,12 +486,11 @@ window.loadFormats = function() {
   console.log("[loadFormats] Funzione chiamata");
   
   // Verifica che l'elemento esista
-  var $formatSelect = $("#formats_select");
-  console.log("[loadFormats] Elemento formats_select trovato:", $formatSelect.length);
+  var $formatsTableBody = $("#formats-table-body");
+  console.log("[loadFormats] Elemento formats-table-body trovato:", $formatsTableBody.length);
   
-  if ($formatSelect.length === 0) {
+  if ($formatsTableBody.length === 0) {
     console.log("[loadFormats] Elemento non trovato, riprovo tra 100ms");
-    // Se l'elemento non esiste, riprova dopo un breve delay
     setTimeout(function() {
       window.loadFormats();
     }, 100);
@@ -469,7 +498,7 @@ window.loadFormats = function() {
   }
   
   console.log("[loadFormats] Chiamata API formats");
-  // Carica i format dall'API e popola la multiselect
+  // Carica i format dall'API e popola la tabella
   $.ajax({
     url: "https://yourradio.org/api/formats?t=" + new Date().getTime(),
     method: "GET",
@@ -479,18 +508,36 @@ window.loadFormats = function() {
       console.log("[loadFormats] Risposta API formats:", response);
       if(response.success && response.data && response.data.length > 0) {
         console.log("[loadFormats] Trovati", response.data.length, "format");
-        $formatSelect.empty();
+        $formatsTableBody.empty();
         
-        response.data.forEach(function(format) {
-          var frmtId = format.frmt_id || '';
-          var frmtNome = (format.frmt_nome && format.frmt_nome !== '') ? format.frmt_nome : 'Format #' + frmtId;
-          $formatSelect.append('<option value="' + frmtId + '">' + frmtNome + '</option>');
+        var formats = response.data;
+        var colsPerRow = 4;
+        var rows = [];
+        for (var i = 0; i < formats.length; i += colsPerRow) {
+          rows.push(formats.slice(i, i + colsPerRow));
+        }
+        
+        rows.forEach(function(rowFormats) {
+          var $tr = $("<tr></tr>");
+          rowFormats.forEach(function(format) {
+            var frmtId = format.frmt_id || '';
+            var frmtNome = (format.frmt_nome && format.frmt_nome !== '') ? format.frmt_nome : 'Format #' + frmtId;
+            var $td = $("<td></td>");
+            var $label = $("<label class='mb-0' style='cursor: pointer;' data-format-name='" + frmtNome.replace(/'/g, "&apos;") + "'></label>");
+            var $cb = $("<input type='checkbox' class='format-checkbox' value='" + frmtId + "' id='format_cb_" + frmtId + "'>");
+            $label.append($cb).append(" " + frmtNome);
+            $td.append($label);
+            $tr.append($td);
+          });
+          while ($tr.find("td").length < colsPerRow) {
+            $tr.append($("<td></td>"));
+          }
+          $formatsTableBody.append($tr);
         });
         
-        console.log("[loadFormats] Format aggiunti alla select, totale opzioni:", $formatSelect.find("option").length);
+        console.log("[loadFormats] Tabella format popolata");
         
         // Carica i format esistenti della song se è una song esistente
-        // Leggi l'ID dal campo del form o dall'URL
         var songId = $("#sg_id").val();
         if (!songId || songId === '' || songId === 'nuova') {
           var urlParams = new URLSearchParams(window.location.search);
@@ -509,33 +556,32 @@ window.loadFormats = function() {
               if(songResponse.success && songResponse.data && songResponse.data.formats && Array.isArray(songResponse.data.formats)) {
                 var existingFormats = songResponse.data.formats;
                 console.log("[loadFormats] Format esistenti della song:", existingFormats);
-                var selectedCount = 0;
-                $formatSelect.find("option").each(function() {
-                  var optionId = parseInt($(this).val());
-                  if (existingFormats.indexOf(optionId) !== -1) {
-                    $(this).prop("selected", true);
-                    selectedCount++;
-                  }
+                existingFormats.forEach(function(formatId) {
+                  $("#format_cb_" + formatId).prop("checked", true);
                 });
-                console.log("[loadFormats] Format selezionati:", selectedCount);
                 updateFormats();
               } else {
-                console.log("[loadFormats] Nessun format trovato nella risposta song o formato non valido");
+                console.log("[loadFormats] Nessun format trovato nella risposta song");
+                updateFormats();
               }
             },
             error: function(xhr, status, error) {
               console.error("[loadFormats] Errore nel caricamento song:", error, xhr);
+              updateFormats();
             }
           });
         } else {
           console.log("[loadFormats] Nuova song, nessun format da selezionare");
+          updateFormats();
         }
       } else {
-        console.warn("[loadFormats] Nessun format nella risposta API o risposta non valida");
+        console.warn("[loadFormats] Nessun format nella risposta API");
+        $formatsTableBody.html("<tr><td colspan='4' class='text-center'>Nessun format disponibile</td></tr>");
       }
     },
     error: function(xhr, status, error) {
       console.error("[loadFormats] Errore nel caricamento format:", error, xhr);
+      $formatsTableBody.html("<tr><td colspan='4' class='text-center text-danger'>Errore nel caricamento format</td></tr>");
     }
   });
 };
@@ -851,13 +897,13 @@ $(document).on("click", "#uploadFile", function (e) {
     });
   });
   
-  // Funzione per aggiornare l'input hidden con i format selezionati
+  // Funzione per aggiornare l'input hidden con i format selezionati (da checkbox)
   function updateFormats() {
     var selectedIds = [];
     var selectedNames = [];
-    $("#formats_select option:selected").each(function() {
+    $(".format-checkbox:checked").each(function() {
       var formatId = parseInt($(this).val());
-      var formatName = $(this).text();
+      var formatName = $(this).closest("label").attr("data-format-name") || $(this).closest("label").text().trim().replace(/^\d+\s*/, "").trim();
       if (formatId > 0) {
         selectedIds.push(formatId);
         selectedNames.push(formatName);
@@ -865,12 +911,21 @@ $(document).on("click", "#uploadFile", function (e) {
     });
     $("#formats").val(JSON.stringify(selectedIds));
     
-    // Aggiorna il campo di visualizzazione
-    var displayText = selectedNames.length > 0 ? selectedNames.join(", ") : "Nessun format selezionato";
-    $("#formats_selected_display").val(displayText);
+    // Aggiorna la visualizzazione dei nomi dei format selezionati
+    var $namesSpan = $("#formats-selected-names");
+    if (selectedNames.length > 0) {
+      $namesSpan.text(selectedNames.join(", ")).removeClass("text-muted").css("color", "white");
+    } else {
+      $namesSpan.text("Nessun format selezionato").removeClass("text-dark").addClass("text-muted").css("color", "");
+    }
     
     console.log("[updateFormats] Format selezionati aggiornati:", selectedIds, "Nomi:", selectedNames);
   }
+  
+  // Listener per i checkbox dei format
+  $(document).on("change", ".format-checkbox", function() {
+    updateFormats();
+  });
   
   // Carica i format quando il documento è pronto o quando la pagina viene caricata dinamicamente
   (function() {
@@ -922,21 +977,7 @@ $(document).on("click", "#uploadFile", function (e) {
     }
   })();
   
-  // Aggiorna l'input hidden quando cambiano le selezioni
-  $(document).on("change", "#formats_select", function() {
-    updateFormats();
-  });
-  
-  // Gestione deselezione con click
-  $(document).on("mousedown", "#formats_select", function(e) {
-    var option = e.target;
-    if (option.tagName === 'OPTION' && option.selected) {
-      e.preventDefault();
-      option.selected = false;
-      updateFormats();
-      $(this).trigger('change');
-    }
-  });
+  // I listener per i checkbox sono già gestiti sopra con $(document).on("change", ".format-checkbox", ...)
   
   // Funzione per caricare i dati della song dall'API e aggiornare il form
   function loadSongData() {
@@ -1027,13 +1068,9 @@ $(document).on("click", "#uploadFile", function (e) {
           }
           // Aggiorna anche i format se presenti
           if(data.formats && Array.isArray(data.formats)) {
-            $("#formats_select option").each(function() {
-              var optionId = parseInt($(this).val());
-              if (data.formats.indexOf(optionId) !== -1) {
-                $(this).prop("selected", true);
-              } else {
-                $(this).prop("selected", false);
-              }
+            $(".format-checkbox").each(function() {
+              var formatId = parseInt($(this).val());
+              $(this).prop("checked", data.formats.indexOf(formatId) !== -1);
             });
             updateFormats();
           }
@@ -1166,9 +1203,9 @@ $(document).on("click", "#uploadFile", function (e) {
     // Aggiungi manualmente sg_attivo (checkbox non viene incluso se non selezionato)
     formData.sg_attivo = $("#sg_attivo").is(":checked") ? 1 : 0;
     
-    // Aggiungi i format selezionati come array (sempre, anche se vuoto)
+    // Aggiungi i format selezionati come array (sempre, anche se vuoto) - dai checkbox
     var formatsArray = [];
-    $("#formats_select option:selected").each(function() {
+    $(".format-checkbox:checked").each(function() {
       var formatId = parseInt($(this).val());
       if (formatId > 0) {
         formatsArray.push(formatId);
