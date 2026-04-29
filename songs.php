@@ -201,6 +201,30 @@ $tables.='
     </div>
   </div>
 </div>
+<!-- Modale Togli dal format -->
+<div class="modal fade" id="modalTogliFormat" tabindex="-1" role="dialog" aria-labelledby="modalTogliFormatTitle" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTogliFormatTitle">Togli dal format</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Chiudi">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="modalTogliFormatText">Seleziona il format da eliminare sulle <span id="modalTogliFormatTot">0</span> song selezionate.</p>
+        <label for="togliFormat_select">Format</label>
+        <select id="togliFormat_select" class="form-control">
+          <option value="">-- Seleziona format --</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Annulla</button>
+        <button type="button" class="btn btn-danger" id="togliFormatConfermaBtn">Conferma</button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- //table '.$tableId.' --> 
 ';
 
@@ -644,8 +668,12 @@ $(document).ready(function() {
 
   function updateAbbinaButton() {
     var $btn = $("#abbinaFormatBtn");
+    var $removeBtn = $("#togliFormatBtn");
     if ($btn.length) {
       $btn.prop("disabled", selectedSongIds.length === 0);
+    }
+    if ($removeBtn.length) {
+      $removeBtn.prop("disabled", selectedSongIds.length === 0);
     }
   }
   
@@ -708,6 +736,74 @@ $(document).ready(function() {
       },
       error: function(xhr) {
         var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore durante l\'abbinamento.";
+        alert(msg);
+      },
+      complete: function() {
+        $btn.prop("disabled", false);
+      }
+    });
+  });
+
+  // Handler per il pulsante "TOGLI DAL FORMAT"
+  $("#togliFormatBtn").on("click", function(){
+    var tot = selectedSongIds.length;
+    $("#modalTogliFormatTot").text(tot);
+    $("#togliFormat_select").empty().append(\'<option value="">-- Seleziona format --</option>\');
+    $.ajax({
+      url: "https://yourradio.org/api/formats?t=" + new Date().getTime(),
+      method: "GET",
+      dataType: "json",
+      cache: false,
+      success: function(response) {
+        if (response.success && response.data && response.data.length) {
+          response.data.forEach(function(format) {
+            var frmtId = format.frmt_id || \'\';
+            var frmtNome = (format.frmt_nome && format.frmt_nome !== \'\') ? format.frmt_nome : \'Format #\' + frmtId;
+            $("#togliFormat_select").append(\'<option value="\' + frmtId + \'">\' + frmtNome + \'</option>\');
+          });
+        }
+      },
+      error: function() {
+        console.error("[songs] Errore caricamento format per modale Togli");
+      }
+    });
+    $("#modalTogliFormat").modal("show");
+  });
+
+  $("#togliFormatConfermaBtn").on("click", function() {
+    var idFormat = $("#togliFormat_select").val();
+    if (!idFormat || idFormat === \'\') {
+      alert("Seleziona un format.");
+      return;
+    }
+    if (selectedSongIds.length === 0) {
+      alert("Nessuna song selezionata.");
+      return;
+    }
+    var $btn = $(this);
+    $btn.prop("disabled", true);
+    $.ajax({
+      url: "https://yourradio.org/api/songs/bulk-unformat",
+      method: "POST",
+      contentType: "application/json; charset=utf-8",
+      dataType: "json",
+      data: JSON.stringify({ song_ids: selectedSongIds, id_format: parseInt(idFormat, 10) }),
+      success: function(response) {
+        $("#modalTogliFormat").modal("hide");
+        var d = response.data || {};
+        var msg = "Rimozione completata: " + (d.removed || 0) + " abbinamenti rimossi";
+        if (d.not_found > 0) msg += ", " + d.not_found + " non presenti";
+        alert(msg);
+        selectedSongIds = [];
+        table.rows().every(function() {
+          var row = this.node();
+          $("input.song-row-cb", row).prop("checked", false);
+        });
+        updateAbbinaButton();
+        updateSelectAllLinkText();
+      },
+      error: function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore durante la rimozione.";
         alert(msg);
       },
       complete: function() {

@@ -319,6 +319,7 @@ class Utils
 		<button type="button"  style="width:100%" id="songFilter_reset" class="btn btn-outline-primary" ><span class="fe fe-refresh-cw fe-16"></span> Reset Filtri</button>
 		<br><br>
 		<button style="width:100%" type="button" id="abbinaFormatBtn" class="btn btn-outline-primary mb-2 songs-abbina-desktop-only" disabled><span class="fe fe-link fe-16"></span> ABBINA AL FORMAT</button>
+		<button style="width:100%" type="button" id="togliFormatBtn" class="btn btn-outline-danger mb-2 songs-abbina-desktop-only" disabled><span class="fe fe-unlink fe-16"></span> TOGLI DAL FORMAT</button>
 		<button style="width:100%" type="button" id="nuovaSongBtn" class="btn btn-outline-primary" ><span class="fe fe-plus fe-16"></span> Nuova Song</button>
 
 		</div>';

@@ -308,6 +308,33 @@ function handleSongsRequest($method, $action, $id, $data) {
                     'already_existed' => $alreadyExisted,
                     'total' => count($songIds)
                 ], "Abbinamento completato");
+            } elseif ($id === null && $action === 'bulk-unformat') {
+                // Rimuove l'abbinamento format da più song
+                if (!isset($data['song_ids']) || !is_array($data['song_ids']) || !isset($data['id_format'])) {
+                    sendErrorResponse("Parametri song_ids (array) e id_format richiesti", 400);
+                }
+                $songIds = array_map('intval', $data['song_ids']);
+                $songIds = array_filter($songIds, function($v) { return $v > 0; });
+                $idFormat = (int)$data['id_format'];
+                if ($idFormat <= 0) {
+                    sendErrorResponse("id_format non valido", 400);
+                }
+                $removed = 0;
+                $notFound = 0;
+                $deleteSt = Songs::$db->prepare("DELETE FROM song_format WHERE id_song = :id_song AND id_format = :id_format");
+                foreach ($songIds as $idSong) {
+                    $deleteSt->execute([':id_song' => $idSong, ':id_format' => $idFormat]);
+                    if ($deleteSt->rowCount() > 0) {
+                        $removed++;
+                    } else {
+                        $notFound++;
+                    }
+                }
+                sendSuccessResponse([
+                    'removed' => $removed,
+                    'not_found' => $notFound,
+                    'total' => count($songIds)
+                ], "Rimozione completata");
             } elseif ($id === null && $action === 'new-with-file') {
                 // Nuova song da file: prossimo sg_file e prossimo sg_id dalla tabella songs, poi upload e INSERT
                 if (!isset($_FILES['file']) || empty($_FILES['file']['tmp_name'])) {
