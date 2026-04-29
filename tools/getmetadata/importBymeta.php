@@ -16,12 +16,15 @@ ini_set('max_execution_time', 0);
 $pageTitle = "Import Songs by Metadata";
 
 // Format da abbinare a ogni nuova song (tabella song_format)
-$newFormat = 65;
+$newFormat = '';
+
+// Fornitore: se "watermelon" usa sg_filename_wm (senza estensione), altrimenti sg_filename_origin
+$fornitore = 'watermelon';
 
 // Limite track da metadata.json: 0 = tutti i tracks; N = solo i primi N (es. 5 per test)
 $limitTracks = 0;
 
-// Valore per il campo sg_diritti nelle nuove song
+// Valore per il campo sg_diritti nelle nuove song (0 = Siae, 1 = Creative, 2 = Soundreef, 3 = Watermelon)
 $diritti = 3;
 
 // Percorsi cartelle (stesso stile di import_wm_songs)
@@ -107,6 +110,8 @@ if (is_file($metadataPath)) {
 $sgIdCounter = $nextSgId;
 $sgFileCounter = $nextSgFile;
 $logMessages = array();
+$hasNewFormat = !($newFormat === null || $newFormat === '');
+$isWatermelon = (strtolower(trim((string)$fornitore)) === 'watermelon');
 
 // Crea cartella newfiles se non esiste
 if (!is_dir($newfilesDir)) {
@@ -146,20 +151,26 @@ foreach ($tracks as $idx => $track) {
     $filesize = isset($track['filesize']) ? (int)$track['filesize'] : 0;
     $sgTitoloEsc = addslashes($titolo);
     $sgArtistaEsc = addslashes($autori);
-    $sgFilenameEsc = addslashes($filename);
+    $filenameNoExt = pathinfo($filename, PATHINFO_FILENAME);
+    $filenameForDb = $isWatermelon ? $filenameNoExt : $filename;
+    $filenameField = $isWatermelon ? 'sg_filename_wm' : 'sg_filename_origin';
+    $sgFilenameEsc = addslashes($filenameForDb);
     $rowLog = array();
 
-    // 1) Verifica se esiste già una song con lo stesso sg_filename_origin (obbligatoria: evita duplicati).
-    //    Il server yourradio.org deve esporre GET /api/songs/byfilenameorigin?filename=...
-    $byOriginUrl = $apiBaseUrl . '/songs/byfilenameorigin?filename=' . urlencode($filename);
-    $byOriginResponse = callApi($byOriginUrl);
+    // 1) Verifica se esiste già una song con lo stesso filename nel campo previsto dal fornitore.
+    //    - watermelon: GET /api/songs/byfilename?filename=<nome_senza_estensione>
+    //    - default:    GET /api/songs/byfilenameorigin?filename=<nome_originale>
+    $byFilenameUrl = $isWatermelon
+        ? ($apiBaseUrl . '/songs/byfilename?filename=' . urlencode($filenameForDb))
+        : ($apiBaseUrl . '/songs/byfilenameorigin?filename=' . urlencode($filenameForDb));
+    $byFilenameResponse = callApi($byFilenameUrl);
     $existingSong = null;
     $existingSgId = null;
 
-    if (!$byOriginResponse['success']) {
+    if (!$byFilenameResponse['success']) {
         // Verifica fallita (endpoint assente, 404, 500, rete): NON creare, evita duplicati
-        $err = isset($byOriginResponse['error']) ? $byOriginResponse['error'] : 'Risposta non valida';
-        $msg = "[Riga " . ($idx + 1) . "] Verifica esistenza fallita (byfilenameorigin): $err. Riga saltata per evitare duplicati.";
+        $err = isset($byFilenameResponse['error']) ? $byFilenameResponse['error'] : 'Risposta non valida';
+        $msg = "[Riga " . ($idx + 1) . "] Verifica esistenza fallita (" . ($isWatermelon ? 'byfilename' : 'byfilenameorigin') . "): $err. Riga saltata per evitare duplicati.";
         $rowLog[] = $msg;
         error_log("importBymeta: " . $msg);
         $planned[] = array(
@@ -174,8 +185,8 @@ foreach ($tracks as $idx => $track) {
         continue;
     }
 
-    if (!isset($byOriginResponse['data']) || !array_key_exists('exists', $byOriginResponse['data'])) {
-        $msg = "[Riga " . ($idx + 1) . "] Risposta byfilenameorigin senza 'data.exists'. Riga saltata per evitare duplicati.";
+    if (!isset($byFilenameResponse['data']) || !array_key_exists('exists', $byFilenameResponse['data'])) {
+        $msg = "[Riga " . ($idx + 1) . "] Risposta API verifica esistenza senza 'data.exists'. Riga saltata per evitare duplicati.";
         $rowLog[] = $msg;
         error_log("importBymeta: " . $msg);
         $planned[] = array(
@@ -190,16 +201,35 @@ foreach ($tracks as $idx => $track) {
         continue;
     }
 
-    if ($byOriginResponse['data']['exists']) {
-        $existingSong = $byOriginResponse['data'];
-        $existingSgId = (int)$byOriginResponse['data']['sg_id'];
+    if ($byFilenameResponse['data']['exists']) {
+        $existingSong = $byFilenameResponse['data'];
+        $existingSgId = (int)$byFilenameResponse['data']['sg_id'];
     }
 
     if ($existingSong && $existingSgId) {
         // Song già presente: non creare, non copiare; aggiungi solo relazione format se manca
-        $msg = "[Riga " . ($idx + 1) . "] sg_filename_origin già presente: \"$filename\" (sg_id=$existingSgId). Song non aggiunta.";
+        $msg = "[Riga " . ($idx + 1) . "] " . $filenameField . " già presente: \"$filenameForDb\" (sg_id=$existingSgId). Song non aggiunta.";
         $rowLog[] = $msg;
         error_log("importBymeta: " . $msg);
+
+        if (!$hasNewFormat) {
+            $msg2 = "[Riga " . ($idx + 1) . "] newFormat vuoto/null: nessuna relazione format da creare.";
+            $rowLog[] = $msg2;
+            error_log("importBymeta: " . $msg2);
+            $planned[] = array(
+                'index' => $idx + 1,
+                'status' => 'existing_skip',
+                'reason' => 'song già presente (nessun format richiesto)',
+                'filename' => $filename,
+                'sg_id' => $existingSgId,
+                'titolo' => $titolo,
+                'autori' => $autori,
+                'log' => $rowLog,
+                'query_songs' => null,
+                'query_song_format' => null
+            );
+            continue;
+        }
 
         // Verifica se la relazione format esiste già
         $formatCheckResponse = callApi($apiBaseUrl . '/songs/' . $existingSgId . '/format?id_format=' . $newFormat);
@@ -257,16 +287,16 @@ foreach ($tracks as $idx => $track) {
         continue;
     }
 
-    // Song non esiste: copia file, crea song e relazione format
+    // Song non esiste: copia file, crea song e (opzionalmente) relazione format
     $sgId = $sgIdCounter;
     $sgFile = $sgFileCounter;
     $destFileName = $sgFile . '.mp3';
     $destFile = $newfilesDir . $destFileName;
     $copyOk = @copy($sourceFile, $destFile);
 
-    $querySongs = "INSERT INTO `songs` (`sg_id`, `sg_file`, `sg_filesize`, `sg_titolo`, `sg_artista`, `sg_anno`, `sg_filename_origin`, `sg_diritti`) " .
+    $querySongs = "INSERT INTO `songs` (`sg_id`, `sg_file`, `sg_filesize`, `sg_titolo`, `sg_artista`, `sg_anno`, `$filenameField`, `sg_diritti`) " .
         "VALUES ($sgId, $sgFile, $filesize, '$sgTitoloEsc', '$sgArtistaEsc', $anno, '$sgFilenameEsc', $diritti);";
-    $querySongFormat = "INSERT INTO `song_format` (`id_song`, `id_format`) VALUES ($sgId, $newFormat);";
+    $querySongFormat = $hasNewFormat ? "INSERT INTO `song_format` (`id_song`, `id_format`) VALUES ($sgId, $newFormat);" : null;
 
     $songInsertOk = false;
     $songInsertError = null;
@@ -278,10 +308,12 @@ foreach ($tracks as $idx => $track) {
             'sg_titolo' => $titolo,
             'sg_artista' => $autori,
             'sg_anno' => $anno,
-            'sg_filename_origin' => (string) $filename,
-            'sg_diritti' => (int) $diritti,
-            'formats' => array($newFormat)
+            $filenameField => (string) $filenameForDb,
+            'sg_diritti' => (int) $diritti
         );
+        if ($hasNewFormat) {
+            $songData['formats'] = array($newFormat);
+        }
         $createResponse = callApi($apiBaseUrl . '/songs', 'POST', $songData);
         $songInsertOk = $createResponse['success'];
         if (!$songInsertOk) {
@@ -350,7 +382,7 @@ $pageReq = substr($_SERVER['REQUEST_URI'], strrpos($_SERVER['REQUEST_URI'], '/')
                             <h4 class="card-title">Import Songs by Metadata</h4>
                         </div>
                         <div class="card-body">
-                            <p class="text-muted">Format ID abbinamento: <strong><?= (int)$newFormat ?></strong>. Diritti (sg_diritti): <strong><?= (int)$diritti ?></strong>. Le INSERT su <strong>songs</strong> e <strong>song_format</strong> vengono eseguite sul DB del server esterno (yourradio.org) via API. La copia file resta in locale (files → newfiles).</p>
+                            <p class="text-muted">Fornitore: <strong><?= htmlspecialchars($fornitore !== '' ? $fornitore : 'default') ?></strong> (campo filename DB: <strong><?= $isWatermelon ? 'sg_filename_wm' : 'sg_filename_origin' ?></strong>). Format ID abbinamento: <strong><?= $hasNewFormat ? htmlspecialchars((string)$newFormat) : 'nessuno' ?></strong>. Diritti (sg_diritti): <strong><?= (int)$diritti ?></strong>. Le INSERT su <strong>songs</strong> e <strong>song_format</strong> vengono eseguite sul DB del server esterno (yourradio.org) via API. La copia file resta in locale (files → newfiles).</p>
 
                             <div class="alert alert-info mb-4">
                                 <h5 class="text-dark">Query usate in apertura (solo lettura, non eseguite da questo script)</h5>
@@ -394,7 +426,7 @@ $pageReq = substr($_SERVER['REQUEST_URI'], strrpos($_SERVER['REQUEST_URI'], '/')
                                             <p class="mb-1"><strong>File:</strong> <?= htmlspecialchars($item['filename']) ?> | <strong>sg_id:</strong> <?= (int)$item['sg_id'] ?></p>
                                             <p class="mb-0"><strong>Titolo:</strong> <?= htmlspecialchars($item['titolo']) ?> | <strong>Autori:</strong> <?= htmlspecialchars($item['autori']) ?></p>
                                         <?php elseif (isset($item['status']) && $item['status'] === 'existing_format_added'): ?>
-                                            <p class="text-info mb-1">Song già presente. Aggiunta solo relazione format (id_format=<?= (int)$newFormat ?>).</p>
+                                            <p class="text-info mb-1">Song già presente. Aggiunta solo relazione format (id_format=<?= htmlspecialchars((string)$newFormat) ?>).</p>
                                             <p class="mb-1"><strong>File:</strong> <?= htmlspecialchars($item['filename']) ?> | <strong>sg_id:</strong> <?= (int)$item['sg_id'] ?></p>
                                             <p class="mb-1"><strong>INSERT song_format (eseguito):</strong></p>
                                             <pre class="bg-dark text-light p-2 rounded small"><?= htmlspecialchars($item['query_song_format']) ?></pre>

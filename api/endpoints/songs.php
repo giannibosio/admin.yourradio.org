@@ -240,16 +240,13 @@ function handleSongsRequest($method, $action, $id, $data) {
                     $filter['periodo'] = $periodoVal;
                 }
                 if (isset($_GET['genere'])) $filter['genere'] = (int)$_GET['genere'];
-                // Gestisci diritti: aggiungi al filtro solo se è un valore numerico valido (non "*" o vuoto)
-                // Nota: il valore 0 (Siae) è valido e deve essere incluso nel filtro
+                // Gestisci diritti: aggiungi al filtro se è numerico (anche 0)
+                // Accetta tutti i valori numerici per evitare che nuovi codici vengano ignorati.
                 if (isset($_GET['diritti']) && $_GET['diritti'] !== '*' && $_GET['diritti'] !== '' && $_GET['diritti'] !== null) {
                     $dirittiVal = trim($_GET['diritti']);
                     if ($dirittiVal !== '*' && $dirittiVal !== '') {
-                        // Converti a intero (0, 1, 3 sono valori validi)
-                        $dirittiInt = (int)$dirittiVal;
-                        // Verifica che sia un numero valido (0, 1, o 3)
-                        if ($dirittiInt === 0 || $dirittiInt === 1 || $dirittiInt === 3) {
-                            $filter['diritti'] = $dirittiInt;
+                        if (is_numeric($dirittiVal)) {
+                            $filter['diritti'] = (int)$dirittiVal;
                         }
                     }
                 }
