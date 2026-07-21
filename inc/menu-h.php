@@ -20,6 +20,17 @@
               justify-content: flex-end !important;
               margin-left: auto;
             }
+            /* Menu: colore di default voci + dimensione font */
+            #navbarSupportedContent .navbar-nav .nav-link,
+            #navbarSupportedContent .navbar-nav .dropdown-menu .nav-link{
+              color: #fff !important;
+              font-size: 18px !important; /* da 17px */
+            }
+            /* Mantieni testo bianco anche su hover/focus */
+            #navbarSupportedContent .navbar-nav .nav-link:hover,
+            #navbarSupportedContent .navbar-nav .nav-link:focus{
+              color: #fff !important;
+            }
           </style>
           <div class="navbar-slide bg-white d-flex justify-content-end" id="navbarSupportedContent">
             <a href="#" class="btn toggle-sidebar d-lg-none text-muted ml-2 mt-3" data-toggle="toggle">
@@ -38,21 +49,19 @@
                 </a>
                 <div class="dropdown-menu" aria-labelledby="dashboardDropdown">
                   <a class="nav-link pl-lg-2" href="./profili.php"><span class="ml-1">Profili</span></a>
-                  <a class="nav-link pl-lg-2" href="./songs.php"><span class="ml-1">Sogns</span></a>
+                  <a class="nav-link pl-lg-2" href="./songs.php"><span class="ml-1">Songs</span></a>
                   <a class="nav-link pl-lg-2" href="./format.php"><span class="ml-1">Format</span></a>
                   <a class="nav-link pl-lg-2" href="./a-rubriche.php"><span class="ml-1">Rubriche</span></a>
                 </div>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="./gruppi.php">
-                  <span class="ml-lg-2">Gruppi </span>
-                  
+                  <i class="fe fe-layers fe-16"></i><span class="ml-lg-2">Gruppi </span>
                 </a>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="./monitor-sso.php" target="_blank" rel="noopener noreferrer">
-                  <span class="ml-lg-2">Monitor </span>
-                  
+                  <i class="fe fe-monitor fe-16"></i><span class="ml-lg-2">Monitor </span>
                 </a>
               </li>
             </ul>
