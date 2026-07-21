@@ -24,8 +24,9 @@ class Select {
 		          "0" => "SIAE",
 		          "1" => "CREATIVE C",
 				  "2" => "SOUNDREEF",
-		          "3" => "WATERMELON"
-	        	); 
+		          "3" => "WATERMELON",
+		          "4" => "YOURRADIO"
+	        	);
 	        	break;
 			case 'sg_umoreId':
 				return array(

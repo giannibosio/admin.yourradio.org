@@ -303,6 +303,7 @@ class Utils
 	    	<option value="1">Creative C</option>
 			<option value="2">Soundreef</option>
 	    	<option value="3">WaterMelon</option>
+	    	<option value="4">YourRadio</option>
 	    </select>
     	';
     	
