@@ -1038,7 +1038,27 @@ $(document).ready(function() {
   }
 
   
-  function openSong(id){
+  function showSongsList() {
+    $(".song-scheda").stop(true, true).hide().empty();
+    $(".songs-table").stop(true, true).fadeIn("fast");
+  }
+
+  function syncSongsHistoryState(songId, replaceState) {
+    if (!(window.history && window.history.pushState)) return;
+    var isListState = !songId;
+    var url = isListState ? "songs.php" : "songs.php?id=" + encodeURIComponent(songId);
+    var state = {
+      page: "songs",
+      songId: isListState ? null : String(songId)
+    };
+    if (replaceState) {
+      window.history.replaceState(state, "", url);
+    } else {
+      window.history.pushState(state, "", url);
+    }
+  }
+
+  function openSong(id, skipHistory){
     $(".songs-table").fadeOut( "fast", function() {
       $(".song-scheda").html("<center>...loading "+id+"...</center>");
       $(".song-scheda").fadeIn( "fast", function() {
@@ -1089,6 +1109,9 @@ $(document).ready(function() {
               }
             };
             setTimeout(tryLoadFormats, 50);
+            if (!skipHistory) {
+              syncSongsHistoryState(id, false);
+            }
           }
           if(statusTxt == "error")
             alert("Error: " + xhr.status + ": " + xhr.statusText);
@@ -1096,6 +1119,27 @@ $(document).ready(function() {
       });
     });
   }
+
+  window.addEventListener("popstate", function(event) {
+    var state = event.state || {};
+    if (state.page === "songs" && state.songId) {
+      openSong(state.songId, true);
+      return;
+    }
+    showSongsList();
+  });
+
+  syncSongsHistoryState(null, true);
+  (function restoreSongFromUrl() {
+    var params = new URLSearchParams(window.location.search);
+    var songIdFromUrl = params.get("id");
+    if (songIdFromUrl) {
+      openSong(songIdFromUrl, true);
+      syncSongsHistoryState(songIdFromUrl, true);
+    } else {
+      showSongsList();
+    }
+  })();
   
   // Funzione fallback per caricare direttamente i format se loadFormats non è disponibile
   function loadFormatsDirectly(songId) {
