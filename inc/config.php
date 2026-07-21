@@ -14,6 +14,8 @@ define('SITE_DESCRIPTION', "Radio Instore");
 
 define('PLAYER_PATH', "./player/");
 define('SONG_PATH', $_SERVER['DOCUMENT_ROOT']."/player/song/");
+define('MONITOR_URL', 'https://monitor.yourradio.org');
+define('MONITOR_API_URL', 'https://yourradio.org/monitor/api');
 
 class Select {
 	public static function getOptions($sel)
