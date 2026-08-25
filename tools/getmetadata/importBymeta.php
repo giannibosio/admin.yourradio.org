@@ -22,7 +22,7 @@ $newFormat = '81'; //COVER=3. AI POP=81
 $fornitore = '';
 
 // Limite track da metadata.json: 0 = tutti i tracks; N = solo i primi N (es. 5 per test)
-$limitTracks =0 ;
+$limitTracks =1 ;
 
 // Valore per il campo sg_diritti nelle nuove song (0 = Siae, 1 = Creative, 2 = Soundreef, 3 = Watermelon, 4 = YourRadio)
 $diritti = 4;
