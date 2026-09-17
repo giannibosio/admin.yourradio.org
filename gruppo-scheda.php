@@ -137,7 +137,7 @@ $tableSubGruppi='
 <div class="card shadow" style="border: 1px solid #666">
 <div class="card-body">
 <h5 class="card-title">Sottogruppi</h5>
-  <table class="table table-hover table-sm">
+  <table class="table table-hover table-sm" id="table-sottogruppi">
     <thead>
       <tr>
       <th>Nome</th>
@@ -145,32 +145,34 @@ $tableSubGruppi='
       <th></th>
       </tr>
     </thead>
-    <tbody>';
+    <tbody id="tbody-sottogruppi">';
     if($tot>0){
 foreach($sgs as $sg){
   $totPlayers = isset($sg['tot_player']) ? $sg['tot_player'] : 0;
+  $sgId = isset($sg['sgr_id']) ? $sg['sgr_id'] : (isset($sg['id']) ? $sg['id'] : '');
+  $sgNome = isset($sg['sgr_nome']) ? $sg['sgr_nome'] : (isset($sg['nome']) ? $sg['nome'] : '');
   $buttonClass = $totPlayers > 0 ? "btn-outline-success" : "btn-outline-danger";
   $tableSubGruppi.='
-  <tr>
-    <td>'.(isset($sg['sgr_nome']) ? $sg['sgr_nome'] : (isset($sg['nome']) ? $sg['nome'] : '')).'</td>
+  <tr data-sgr-id="'.$sgId.'">
+    <td>'.htmlspecialchars($sgNome).'</td>
     <td>
       <button type="button" class="btn '.$buttonClass.' btn-sm btn-show-players-subgroup" 
               data-toggle="modal" 
               data-target="#playersSubgruppoModal" 
-              data-subgruppo-id="'.(isset($sg['sgr_id']) ? $sg['sgr_id'] : (isset($sg['id']) ? $sg['id'] : '')).'" 
-              data-subgruppo-nome="'.htmlspecialchars(isset($sg['sgr_nome']) ? $sg['sgr_nome'] : (isset($sg['nome']) ? $sg['nome'] : ''), ENT_QUOTES).'"
+              data-subgruppo-id="'.$sgId.'" 
+              data-subgruppo-nome="'.htmlspecialchars($sgNome, ENT_QUOTES).'"
               title="Visualizza players"
               style="width: 40px; font-size: 16px;">
         '.$totPlayers.'
       </button>
     </td>
     <td>
-<button title="cancella" type="button" class="btn btn-outline-danger badge-del-subgroup" data-toggle="modal" data-target="#verticalModalSottogruppo" namegroup="'.strtoupper(isset($sg['sgr_nome']) ? $sg['sgr_nome'] : (isset($sg['nome']) ? $sg['nome'] : '')).'" idgroup='.(isset($sg['sgr_id']) ? $sg['sgr_id'] : (isset($sg['id']) ? $sg['id'] : '')).'><span class="fe fe-trash fe-16"></span></button>
+<button title="cancella" type="button" class="btn btn-outline-danger badge-del-subgroup" data-toggle="modal" data-target="#verticalModalSottogruppo" namegroup="'.htmlspecialchars(strtoupper($sgNome), ENT_QUOTES).'" idgroup="'.$sgId.'"><span class="fe fe-trash fe-16"></span></button>
   </tr>                      
   ';
 }  
 }else{
-  $tableSubGruppi.='<tr><td>NESSUNO</td><td></td></tr>';
+  $tableSubGruppi.='<tr class="sottogruppi-empty"><td>NESSUNO</td><td></td><td></td></tr>';
 }
 $tableSubGruppi.='</tbody>
                   </table>
@@ -743,17 +745,126 @@ $script='
     console.log("torna alla lista");
     window.open("gruppi.php","_self");
   });
-  $( "#deleteSubGroup" ).click(function() {
-    $("#formAction").val("deleteSubGroup");
-    console.log("cancella sottogruppo "+$("#SubGroupSelName").val()+ " - id."+$("#SubGroupSelId").val());
-    $( "#scheda-gruppo" ).submit();
-  });
-  $( "#addNewSubGroup" ).click(function() {
-    $("#formAction").val("addNewSubGroup");
-    $("#newSubGroupName").val($("#newName").val());
-    console.log("aggiungi sottogruppo "+$("#newName").val());
 
-    $( "#scheda-gruppo" ).submit();
+  function renderSottogruppiRows(list) {
+    var $tbody = $("#tbody-sottogruppi");
+    if ($tbody.length === 0) return;
+    $tbody.empty();
+    if (!list || list.length === 0) {
+      $tbody.append(\'<tr class="sottogruppi-empty"><td>NESSUNO</td><td></td><td></td></tr>\');
+      return;
+    }
+    $.each(list, function(i, sg) {
+      var sgId = sg.sgr_id || sg.id || "";
+      var sgNome = (sg.sgr_nome || sg.nome || "").toString().toUpperCase();
+      var totPlayers = parseInt(sg.tot_player, 10) || 0;
+      var buttonClass = totPlayers > 0 ? "btn-outline-success" : "btn-outline-danger";
+      var row = \'<tr data-sgr-id="\' + sgId + \'">\' +
+        \'<td>\' + $("<div>").text(sgNome).html() + \'</td>\' +
+        \'<td><button type="button" class="btn \' + buttonClass + \' btn-sm btn-show-players-subgroup" data-toggle="modal" data-target="#playersSubgruppoModal" data-subgruppo-id="\' + sgId + \'" data-subgruppo-nome="\' + $("<div>").text(sgNome).html() + \'" title="Visualizza players" style="width: 40px; font-size: 16px;">\' + totPlayers + \'</button></td>\' +
+        \'<td><button title="cancella" type="button" class="btn btn-outline-danger badge-del-subgroup" data-toggle="modal" data-target="#verticalModalSottogruppo" namegroup="\' + $("<div>").text(sgNome).html() + \'" idgroup="\' + sgId + \'"><span class="fe fe-trash fe-16"></span></button></td>\' +
+        \'</tr>\';
+      $tbody.append(row);
+    });
+  }
+
+  function reloadSottogruppiList() {
+    var gruppoId = $("#groupId").val() || "<?=htmlspecialchars((string)$id, ENT_QUOTES)?>";
+    if (!gruppoId || gruppoId === "nuova" || gruppoId === "0") return;
+    $.ajax({
+      url: "https://yourradio.org/api/gruppi/" + gruppoId + "/subgruppi?t=" + new Date().getTime(),
+      type: "GET",
+      dataType: "json",
+      cache: false,
+      success: function(response) {
+        if (response && response.success) {
+          renderSottogruppiRows(response.data || []);
+        }
+      },
+      error: function(xhr, status, error) {
+        console.error("Errore ricarico sottogruppi:", error);
+      }
+    });
+  }
+
+  // Delegato: il click sui bottoni cancellazione dopo il re-render
+  $(document).on("click", ".badge-del-subgroup", function() {
+    $("#SubGroupSelId").val($(this).attr("idgroup"));
+    $("#SubGroupSelName").val($(this).attr("namegroup"));
+    var namen = $("#SubGroupSelName").val();
+    $("#modal-del-subgroup-text").html("Vuoi cancellare il sottogruppo " + namen + " e tutti i collegamenti ai player ?");
+  });
+
+  $( "#deleteSubGroup" ).click(function() {
+    var sgrId = $("#SubGroupSelId").val();
+    var $btn = $(this);
+    if (!sgrId) {
+      alert("Sottogruppo non selezionato");
+      return;
+    }
+    $btn.prop("disabled", true);
+    $.ajax({
+      url: "https://yourradio.org/api/subgruppi/" + encodeURIComponent(sgrId),
+      type: "DELETE",
+      dataType: "json",
+      success: function(response) {
+        $("#verticalModalSottogruppo").modal("hide");
+        if (response && response.success) {
+          reloadSottogruppiList();
+        } else {
+          var msg = (response && response.error && response.error.message) ? response.error.message : "Errore nella cancellazione";
+          alert(msg);
+        }
+      },
+      error: function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore di rete o server";
+        alert(msg);
+      },
+      complete: function() {
+        $btn.prop("disabled", false);
+        $("#SubGroupSelId").val("");
+        $("#SubGroupSelName").val("");
+      }
+    });
+  });
+
+  $( "#addNewSubGroup" ).click(function() {
+    var nome = ($("#newName").val() || "").trim();
+    var gruppoId = $("#groupId").val() || "<?=htmlspecialchars((string)$id, ENT_QUOTES)?>";
+    var $btn = $(this);
+    if (!nome) {
+      alert("Inserisci il nome del sottogruppo");
+      return;
+    }
+    if (!gruppoId || gruppoId === "nuova" || gruppoId === "0") {
+      alert("Salva prima il gruppo, poi aggiungi i sottogruppi");
+      return;
+    }
+    $btn.prop("disabled", true);
+    $.ajax({
+      url: "https://yourradio.org/api/gruppi/" + encodeURIComponent(gruppoId) + "/subgruppi",
+      type: "POST",
+      contentType: "application/json; charset=utf-8",
+      dataType: "json",
+      data: JSON.stringify({ nome: nome }),
+      success: function(response) {
+        $("#subGroupAddModal").modal("hide");
+        $("#newName").val("");
+        if (response && response.success) {
+          reloadSottogruppiList();
+        } else {
+          var msg = (response && response.error && response.error.message) ? response.error.message : "Errore nella creazione";
+          alert(msg);
+        }
+      },
+      error: function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.error && xhr.responseJSON.error.message) ? xhr.responseJSON.error.message : "Errore di rete o server";
+        alert(msg);
+      },
+      complete: function() {
+        $btn.prop("disabled", false);
+      }
+    });
   });
 
   // Gestione modale players sottogruppo
@@ -1253,7 +1364,7 @@ $script='
                         </div>
                         <div class="modal-footer">
                           <button type="button" class="btn mb-2 btn-secondary" data-dismiss="modal">Annulla</button>
-                          <button type="button" class="btn mb-2 btn-primary" data-dismiss="modal" id="addNewSubGroup">Aggiungi</button>
+                          <button type="button" class="btn mb-2 btn-primary" id="addNewSubGroup">Aggiungi</button>
                         </div>
                       </div>
                     </div>

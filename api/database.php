@@ -786,17 +786,80 @@ class Gruppi extends DB
     {
         $query = "SELECT sgr.sgr_id, sgr.sgr_nome FROM sub_gruppi AS sgr 
                   JOIN gruppi AS gr ON(sgr.sgr_gr_id=gr.gr_id) 
-                  WHERE gr.gr_id = :id";
+                  WHERE gr.gr_id = :id
+                  ORDER BY sgr.sgr_nome ASC";
         $st = self::$db->prepare($query);
-        $st->execute([':id' => $id]);
+        $st->execute(array(':id' => $id));
         return $st->fetchAll();
+    }
+
+    /**
+     * Crea un sottogruppo (compatibile PHP 5.6)
+     * @param int $idGroup
+     * @param string $name
+     * @return int|false ID del nuovo sottogruppo
+     */
+    public static function addSottoGruppoByName($idGroup, $name)
+    {
+        $name = strtoupper(trim($name));
+        if ($name === '' || (int)$idGroup <= 0) {
+            return false;
+        }
+
+        // Nota: colonna storica chiamata srg_data_creazione (typo legacy nel DB)
+        $query = "INSERT INTO `sub_gruppi`
+                  SET `sgr_gr_id` = :gr_id,
+                      `sgr_nome` = :nome,
+                      `srg_data_creazione` = :data_creazione";
+        $st = self::$db->prepare($query);
+        $ok = $st->execute(array(
+            ':gr_id' => (int)$idGroup,
+            ':nome' => $name,
+            ':data_creazione' => date('Y-m-d H:i:s')
+        ));
+        if (!$ok) {
+            return false;
+        }
+        return (int)self::$db->lastInsertId();
+    }
+
+    /**
+     * Cancella un sottogruppo e i collegamenti ai player (compatibile PHP 5.6)
+     * @param int $id
+     * @return bool
+     */
+    public static function deleteSottoGruppoById($id)
+    {
+        $id = (int)$id;
+        if ($id <= 0) {
+            return false;
+        }
+
+        $st = self::$db->prepare("DELETE FROM `player_subgruppo` WHERE `plsgr_sgr_id` = :id");
+        $st->execute(array(':id' => $id));
+
+        $st = self::$db->prepare("DELETE FROM `sub_gruppi` WHERE `sgr_id` = :id");
+        return $st->execute(array(':id' => $id));
+    }
+
+    /**
+     * Recupera un sottogruppo per ID
+     * @param int $id
+     * @return array
+     */
+    public static function selectSottoGruppoBySgrId($id)
+    {
+        $st = self::$db->prepare("SELECT `sgr_id`, `sgr_nome`, `sgr_gr_id` FROM `sub_gruppi` WHERE `sgr_id` = :id LIMIT 1");
+        $st->execute(array(':id' => (int)$id));
+        $row = $st->fetch();
+        return $row ? $row : array();
     }
 
     public static function selectTotPlayersSottoGruppoById($id)
     {
         $query = "SELECT COUNT(plsgr.plsgr_pl_id) as tot_player FROM player_subgruppo AS plsgr WHERE plsgr.plsgr_sgr_id = :id";
         $st = self::$db->prepare($query);
-        $st->execute([':id' => $id]);
+        $st->execute(array(':id' => $id));
         return $st->fetchAll();
     }
 

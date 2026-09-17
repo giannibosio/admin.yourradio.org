@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+# Backup YourRadio: server Register -> server Aruba (rsync + mysqldump)
+#
+# Installazione Register:
+#   cp backup.env.example /etc/yourradio/backup.env && chmod 600 /etc/yourradio/backup.env
+#   cp register_to_aruba_backup.sh /usr/local/bin/yourradio-backup && chmod 750 /usr/local/bin/yourradio-backup
+#
+# Cron (prima sync notturna, poi incrementale):
+#   0 2 * * * /usr/local/bin/yourradio-backup >> /var/log/yourradio-backup/cron.log 2>&1
+#
+set -euo pipefail
+
+CONFIG="${YOURRADIO_BACKUP_CONFIG:-/etc/yourradio/backup.env}"
+LOCK_FILE="/var/run/yourradio-backup.lock"
+LOG_DIR="/var/log/yourradio-backup"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+DATE_TAG="$(date +%Y-%m-%d)"
+TODAY_START="$(date +%s)"
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+die() {
+  log "ERRORE: $*"
+  notify_failure "$*"
+  exit 1
+}
+
+notify_failure() {
+  local msg="$1"
+  if [[ -n "${MAIL_TO:-}" ]] && command -v mail >/dev/null 2>&1; then
+    echo "$msg" | mail -s "YourRadio backup FALLITO ($DATE_TAG)" ${MAIL_FROM:+-r "$MAIL_FROM"} "$MAIL_TO" || true
+  fi
+}
+
+notify_success() {
+  local msg="$1"
+  if [[ -n "${MAIL_TO:-}" ]] && command -v mail >/dev/null 2>&1; then
+    echo "$msg" | mail -s "YourRadio backup OK ($DATE_TAG)" ${MAIL_FROM:+-r "$MAIL_FROM"} "$MAIL_TO" || true
+  fi
+}
+
+cleanup() {
+  local code=$?
+  rm -f "$LOCK_FILE"
+  if [[ $code -ne 0 ]]; then
+    log "Script terminato con codice $code"
+  fi
+}
+trap cleanup EXIT
+
+if [[ ! -f "$CONFIG" ]]; then
+  echo "File config mancante: $CONFIG" >&2
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "$CONFIG"
+
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/backup_${STAMP}.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+log "=== Avvio backup YourRadio -> Aruba ==="
+log "Config: $CONFIG"
+log "Log: $LOG_FILE"
+
+if [[ -f "$LOCK_FILE" ]]; then
+  old_pid="$(cat "$LOCK_FILE" 2>/dev/null || echo "")"
+  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+    die "Backup già in esecuzione (PID $old_pid)"
+  fi
+  log "Lock obsoleto rimosso"
+  rm -f "$LOCK_FILE"
+fi
+echo $$ > "$LOCK_FILE"
+
+for cmd in rsync ssh mysqldump; do
+  command -v "$cmd" >/dev/null || die "Comando mancante: $cmd"
+done
+
+: "${ARUBA_HOST:?ARUBA_HOST non impostato}"
+: "${ARUBA_USER:?ARUBA_USER non impostato}"
+: "${ARUBA_BASE:?ARUBA_BASE non impostato}"
+
+# OpenSSH del Register è spesso vecchio (es. 6.7): "accept-new" non esiste (< 7.6).
+# Usa "yes" se l'host è già in known_hosts (consigliato dopo il primo login manuale).
+# Override in backup.env: SSH_STRICT_HOST_KEY=no  (solo se proprio necessario)
+SSH_STRICT="${SSH_STRICT_HOST_KEY:-yes}"
+SSH_OPTS=(-o BatchMode=yes -o "StrictHostKeyChecking=${SSH_STRICT}" -p "${ARUBA_SSH_PORT:-22}")
+if [[ -n "${ARUBA_SSH_KEY:-}" && -f "$ARUBA_SSH_KEY" ]]; then
+  SSH_OPTS+=(-i "$ARUBA_SSH_KEY" -o IdentitiesOnly=yes)
+fi
+
+RSYNC_SSH="ssh ${SSH_OPTS[*]}"
+# Default CONSERVATIVO: limita banda (KB/s). 0 = illimitato (pericoloso di giorno).
+RSYNC_BWLIMIT="${RSYNC_BWLIMIT:-5000}"
+# Solo OPZIONI (senza la parola "rsync" — altrimenti si raddoppia il comando)
+RSYNC_OPTS=(-aH --delete --numeric-ids --partial --human-readable)
+# --append-verify può dare problemi su rsync vecchi; partial basta per ripresa
+if [[ "${RSYNC_BWLIMIT}" != "0" ]]; then
+  RSYNC_OPTS+=(--bwlimit="$RSYNC_BWLIMIT")
+  log "rsync bwlimit: ${RSYNC_BWLIMIT} KB/s"
+fi
+
+# Priorità bassa CPU/IO
+NICE_BIN=()
+if command -v nice >/dev/null 2>&1; then
+  NICE_BIN+=(nice -n "${BACKUP_NICE:-19}")
+fi
+if command -v ionice >/dev/null 2>&1; then
+  NICE_BIN+=(ionice -c "${BACKUP_IONICE_CLASS:-3}")
+fi
+run_slow() {
+  if [[ ${#NICE_BIN[@]} -gt 0 ]]; then
+    "${NICE_BIN[@]}" "$@"
+  else
+    "$@"
+  fi
+}
+
+# Wrapper rsync: exit 24 = file spariti durante il transfer (xml player) → OK
+rsync_run() {
+  local rc=0
+  set +e
+  run_slow rsync "${RSYNC_OPTS[@]}" -e "$RSYNC_SSH" "$@"
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 || $rc -eq 24 ]]; then
+    if [[ $rc -eq 24 ]]; then
+      log "WARN: rsync code 24 (file vanished) — considerato OK"
+    fi
+    return 0
+  fi
+  return "$rc"
+}
+
+REMOTE="${ARUBA_USER}@${ARUBA_HOST}"
+REMOTE_TODAY="${ARUBA_BASE}/${DATE_TAG}"
+REMOTE_LATEST="${ARUBA_BASE}/latest"
+
+log "Verifica connessione SSH verso $REMOTE ..."
+ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_TODAY'/player '$REMOTE_TODAY'/httpdocs '$REMOTE_TODAY'/mysql '$REMOTE_LATEST'" \
+  || die "Impossibile connettersi o creare cartelle su Aruba"
+
+# --- MySQL dump (locale su Register) ---
+DUMP_OK=0
+if [[ -n "${MYSQL_DATABASE:-}" ]]; then
+  LOCAL_DUMP_DIR="/var/backups/yourradio/mysql"
+  mkdir -p "$LOCAL_DUMP_DIR"
+  DUMP_FILE="$LOCAL_DUMP_DIR/myradio_${STAMP}.sql.gz"
+  log "Dump MySQL: $MYSQL_DATABASE -> $DUMP_FILE"
+  if [[ -n "${MYSQL_CNF:-}" && -f "$MYSQL_CNF" ]]; then
+    run_slow mysqldump \
+      --defaults-extra-file="$MYSQL_CNF" \
+      --single-transaction \
+      --routines \
+      --triggers \
+      --events \
+      "$MYSQL_DATABASE" \
+      | run_slow gzip -1 > "$DUMP_FILE" \
+      || die "mysqldump fallito"
+  else
+    run_slow mysqldump \
+      --host="${MYSQL_HOST:-localhost}" \
+      --user="$MYSQL_USER" \
+      --password="$MYSQL_PASSWORD" \
+      --single-transaction \
+      --routines \
+      --triggers \
+      --events \
+      "$MYSQL_DATABASE" \
+      | run_slow gzip -1 > "$DUMP_FILE" \
+      || die "mysqldump fallito"
+  fi
+  DUMP_OK=1
+
+  log "Invio dump su Aruba ..."
+  rsync_run \
+    "$DUMP_FILE" \
+    "${REMOTE}:${REMOTE_TODAY}/mysql/" \
+    || die "rsync dump fallito"
+
+  # symlink latest dump
+  ssh "${SSH_OPTS[@]}" "$REMOTE" \
+    "ln -sfn '$REMOTE_TODAY/mysql/$(basename "$DUMP_FILE")' '$REMOTE_LATEST/myradio.sql.gz'" \
+    || log "WARN: symlink dump latest non creato"
+else
+  log "MYSQL_DATABASE non impostato: salto dump DB"
+fi
+
+# --- Player (priorità massima) ---
+PLAYER_RSYNCED=0
+if [[ -n "${SOURCE_PLAYER:-}" && -d "$SOURCE_PLAYER" ]]; then
+  log "rsync PLAYER: $SOURCE_PLAYER -> ${REMOTE}:${REMOTE_TODAY}/player/"
+  rsync_run \
+    "${SOURCE_PLAYER}/" \
+    "${REMOTE}:${REMOTE_TODAY}/player/" \
+    || die "rsync player fallito"
+  PLAYER_RSYNCED=1
+
+  ssh "${SSH_OPTS[@]}" "$REMOTE" \
+    "ln -sfn '$REMOTE_TODAY/player' '$REMOTE_LATEST/player'" \
+    || log "WARN: symlink player latest non creato"
+else
+  die "SOURCE_PLAYER mancante o non esiste: ${SOURCE_PLAYER:-<vuoto>}"
+fi
+
+# --- httpdocs (escluso player, già copiato) ---
+HTTPDOCS_RSYNCED=0
+if [[ -n "${SOURCE_HTTPDOCS:-}" && -d "$SOURCE_HTTPDOCS" ]]; then
+  log "rsync HTTPDOCS: $SOURCE_HTTPDOCS -> ${REMOTE}:${REMOTE_TODAY}/httpdocs/"
+  rsync_run \
+    --exclude 'player/' \
+    --exclude 'cache/' \
+    --exclude 'tmp/' \
+    --exclude '.git/' \
+    "${SOURCE_HTTPDOCS}/" \
+    "${REMOTE}:${REMOTE_TODAY}/httpdocs/" \
+    || die "rsync httpdocs fallito"
+  HTTPDOCS_RSYNCED=1
+
+  ssh "${SSH_OPTS[@]}" "$REMOTE" \
+    "ln -sfn '$REMOTE_TODAY/httpdocs' '$REMOTE_LATEST/httpdocs'" \
+    || log "WARN: symlink httpdocs latest non creato"
+fi
+
+# --- Path extra opzionali ---
+EXTRA_COUNT=0
+if [[ -n "${SOURCE_EXTRA_PATHS:-}" ]]; then
+  for extra in $SOURCE_EXTRA_PATHS; do
+    if [[ -d "$extra" ]]; then
+      name="$(basename "$extra")"
+      log "rsync extra: $extra"
+      rsync_run \
+        "${extra}/" \
+        "${REMOTE}:${REMOTE_TODAY}/extra/${name}/" \
+        || log "WARN: rsync extra fallito per $extra"
+      EXTRA_COUNT=$((EXTRA_COUNT + 1))
+    else
+      log "WARN: path extra ignorato (non esiste): $extra"
+    fi
+  done
+fi
+
+# --- Retention dump locale Register ---
+if [[ -d "/var/backups/yourradio/mysql" && "${RETENTION_DAYS:-0}" -gt 0 ]]; then
+  find /var/backups/yourradio/mysql -name 'myradio_*.sql.gz' -mtime +"$RETENTION_DAYS" -delete || true
+fi
+
+# --- Retention snapshot giornalieri su Aruba (opzionale) ---
+if [[ "${RETENTION_DAYS:-0}" -gt 0 ]]; then
+  ssh "${SSH_OPTS[@]}" "$REMOTE" \
+    "find '$ARUBA_BASE' -maxdepth 1 -mindepth 1 -type d -name '20*' -mtime +${RETENTION_DAYS} -exec rm -rf {} +" \
+    || log "WARN: retention Aruba non completata"
+fi
+
+ELAPSED=$(( $(date +%s) - TODAY_START ))
+SUMMARY="Backup completato in ${ELAPSED}s
+Player: $([[ $PLAYER_RSYNCED -eq 1 ]] && echo OK || echo SKIP)
+Httpdocs: $([[ $HTTPDOCS_RSYNCED -eq 1 ]] && echo OK || echo SKIP)
+MySQL dump: $([[ $DUMP_OK -eq 1 ]] && echo OK || echo SKIP)
+Path extra: $EXTRA_COUNT
+Destinazione: ${REMOTE}:${REMOTE_TODAY}
+Log: $LOG_FILE"
+
+log "=== RIEPILOGO ==="
+echo "$SUMMARY" | while IFS= read -r line; do log "$line"; done
+
+notify_success "$SUMMARY"
+log "=== Fine backup ==="
+exit 0

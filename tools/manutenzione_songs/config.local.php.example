@@ -1,0 +1,12 @@
+<?php
+/**
+ * Copia come config.local.php e aggiorna le credenziali MySQL del server Register.
+ *
+ *   cp config.local.php.example config.local.php
+ *   nano config.local.php
+ */
+
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'myradio');
+define('DB_USER', 'mymusic');
+define('DB_PASS', 'INSERISCI_PASSWORD');

@@ -170,23 +170,62 @@ try {
             
         case 'subgruppi':
             require_once __DIR__ . '/endpoints/gruppi.php';
-            // Gestione endpoint /api/subgruppi/{id}/players
+            // /api/subgruppi/{id}/players  → lista players
+            // /api/subgruppi/{id}          → DELETE cancella sottogruppo
             if (isset($segments[1]) && is_numeric($segments[1]) && isset($segments[2]) && $segments[2] === 'players') {
+                if ($requestMethod !== 'GET') {
+                    sendErrorResponse("Method not allowed", 405);
+                }
                 $subgruppoId = $segments[1];
                 $players = Gruppi::selectAllPlayersSottoGruppoById($subgruppoId);
-                $result = [];
+                $result = array();
                 foreach ($players as $p) {
                     $status = ($p['pl_active'] == 1) ? "ON" : "OFF";
-                    $result[] = [
+                    $result[] = array(
                         'id' => (int)$p['pl_id'],
                         'nome' => strtoupper($p['pl_nome']),
                         'attivo' => $status,
                         'ultimo_accesso' => substr($p['pl_player_ultimaDataEstesa'], 0, 10)
-                    ];
+                    );
                 }
                 sendSuccessResponse($result);
+            } elseif (isset($segments[1]) && is_numeric($segments[1]) && !isset($segments[2])) {
+                $subgruppoId = (int)$segments[1];
+                if ($requestMethod === 'DELETE') {
+                    $sg = Gruppi::selectSottoGruppoBySgrId($subgruppoId);
+                    if (empty($sg)) {
+                        sendErrorResponse("Sottogruppo non trovato", 404);
+                    }
+                    if (!Gruppi::deleteSottoGruppoById($subgruppoId)) {
+                        sendErrorResponse("Errore nella cancellazione del sottogruppo", 500);
+                    }
+                    sendSuccessResponse(array(
+                        'id' => $subgruppoId,
+                        'gr_id' => isset($sg['sgr_gr_id']) ? (int)$sg['sgr_gr_id'] : null
+                    ), "Sottogruppo eliminato con successo");
+                } elseif ($requestMethod === 'GET') {
+                    $sg = Gruppi::selectSottoGruppoBySgrId($subgruppoId);
+                    if (empty($sg)) {
+                        sendErrorResponse("Sottogruppo non trovato", 404);
+                    }
+                    $totPlayers = Gruppi::selectTotPlayersSottoGruppoById($subgruppoId);
+                    $tot = 0;
+                    if (isset($totPlayers[0]['tot_player'])) {
+                        $tot = (int)$totPlayers[0]['tot_player'];
+                    }
+                    sendSuccessResponse(array(
+                        'id' => (int)$sg['sgr_id'],
+                        'sgr_id' => (int)$sg['sgr_id'],
+                        'nome' => strtoupper($sg['sgr_nome']),
+                        'sgr_nome' => strtoupper($sg['sgr_nome']),
+                        'gr_id' => (int)$sg['sgr_gr_id'],
+                        'tot_player' => $tot
+                    ));
+                } else {
+                    sendErrorResponse("Method not allowed", 405);
+                }
             } else {
-                sendErrorResponse("Endpoint non valido. Usa /api/subgruppi/{id}/players", 400);
+                sendErrorResponse("Endpoint non valido. Usa /api/subgruppi/{id} o /api/subgruppi/{id}/players", 400);
             }
             break;
             

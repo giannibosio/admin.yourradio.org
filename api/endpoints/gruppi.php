@@ -60,14 +60,20 @@ function handleGruppiRequest($method, $action, $id, $data) {
             } elseif ($id !== null && $action === 'subgruppi') {
                 // Lista sottogruppi
                 $subgruppi = Gruppi::selectSubGruppoById($id);
-                $result = [];
+                $result = array();
                 foreach ($subgruppi as $sg) {
                     $totPlayers = Gruppi::selectTotPlayersSottoGruppoById($sg['sgr_id']);
-                    $result[] = [
+                    $tot = 0;
+                    if (isset($totPlayers[0]['tot_player'])) {
+                        $tot = (int)$totPlayers[0]['tot_player'];
+                    }
+                    $result[] = array(
                         'id' => (int)$sg['sgr_id'],
+                        'sgr_id' => (int)$sg['sgr_id'],
                         'nome' => strtoupper($sg['sgr_nome']),
-                        'tot_player' => (int)$totPlayers[0]['tot_player']
-                    ];
+                        'sgr_nome' => strtoupper($sg['sgr_nome']),
+                        'tot_player' => $tot
+                    );
                 }
                 sendSuccessResponse($result);
             } elseif ($id !== null && $action === 'campagne') {
@@ -171,7 +177,29 @@ function handleGruppiRequest($method, $action, $id, $data) {
                     // Non blocchiamo la creazione del gruppo se la cartella fallisce, ma logghiamo l'errore
                 }
                 
-                sendSuccessResponse(['id' => $newId], "Gruppo creato con successo");
+                sendSuccessResponse(array('id' => $newId), "Gruppo creato con successo");
+            } elseif ($id !== null && $action === 'subgruppi') {
+                // Crea nuovo sottogruppo: POST /api/gruppi/{id}/subgruppi
+                if (!isset($data['nome']) || trim($data['nome']) === '') {
+                    sendErrorResponse("Nome sottogruppo richiesto", 400);
+                }
+                $gruppo = Gruppi::selectGruppoById($id);
+                if (empty($gruppo)) {
+                    sendErrorResponse("Gruppo non trovato", 404);
+                }
+                $nome = strtoupper(trim(sanitizeInput($data['nome'])));
+                $newId = Gruppi::addSottoGruppoByName($id, $nome);
+                if (!$newId) {
+                    sendErrorResponse("Errore nella creazione del sottogruppo", 500);
+                }
+                sendSuccessResponse(array(
+                    'id' => (int)$newId,
+                    'sgr_id' => (int)$newId,
+                    'nome' => $nome,
+                    'sgr_nome' => $nome,
+                    'tot_player' => 0,
+                    'gr_id' => (int)$id
+                ), "Sottogruppo creato con successo");
             } else {
                 sendErrorResponse("Action non valida", 400);
             }
@@ -195,9 +223,12 @@ function handleGruppiRequest($method, $action, $id, $data) {
             break;
             
         case 'DELETE':
-            // Elimina gruppo
+            // Elimina gruppo SOLO se non c'è una action (evita DELETE /gruppi/{id}/subgruppi che cancelli il gruppo)
             if ($id === null) {
                 sendErrorResponse("ID gruppo richiesto", 400);
+            }
+            if ($action !== '' && $action !== null) {
+                sendErrorResponse("Action non valida per DELETE gruppo. Per cancellare un sottogruppo usa DELETE /api/subgruppi/{id}", 400);
             }
             
             // Recupera i dati del gruppo per ottenere il nome
@@ -205,23 +236,36 @@ function handleGruppiRequest($method, $action, $id, $data) {
             if (empty($gruppo)) {
                 sendErrorResponse("Gruppo non trovato", 404);
             }
-            $gruppoNome = strtolower(trim($gruppo[0]['gr_nome']));
+            // $gruppoNome calcolato dopo delete DB, con validazioni di sicurezza
             
             // Cancella il gruppo dal database (cancella anche sottogruppi, players, ecc.)
             if (!Gruppi::deleteGruppoById($id)) {
                 sendErrorResponse("Errore nella cancellazione del gruppo dal database", 500);
             }
             
-            // Cancella la cartella del gruppo sul server
-            $basePath = "/var/www/vhosts/yourradio.org/httpdocs/player/" . $gruppoNome;
-            if (is_dir($basePath)) {
-                if (!deleteDirectory($basePath)) {
-                    error_log("Avviso: Impossibile cancellare completamente la directory: {$basePath}");
-                    // Non blocchiamo se la cartella non viene cancellata, il gruppo è già stato eliminato dal DB
+            // Cancella SOLO la cartella del singolo gruppo.
+            // Protezione critica: nome vuoto => path = .../player/  => cancellerebbe TUTTO.
+            $gruppoNome = strtolower(trim($gruppo[0]['gr_nome']));
+            $gruppoNome = preg_replace('/[^a-z0-9_\-\s]/', '', $gruppoNome);
+            $gruppoNome = trim($gruppoNome);
+            if ($gruppoNome === '' || $gruppoNome === '.' || $gruppoNome === '..') {
+                error_log("DELETE GRUPPO: cartella NON cancellata (nome gruppo non valido/vuoto). ID=" . $id);
+            } else {
+                $playerRoot = "/var/www/vhosts/yourradio.org/httpdocs/player";
+                $basePath = $playerRoot . "/" . $gruppoNome;
+                $realRoot = realpath($playerRoot);
+                $realPath = realpath($basePath);
+                // Cancella solo se la path è una sottocartella reale di /player
+                if ($realRoot && $realPath && strpos($realPath, $realRoot . DIRECTORY_SEPARATOR) === 0 && $realPath !== $realRoot) {
+                    if (!deleteDirectory($realPath)) {
+                        error_log("Avviso: Impossibile cancellare completamente la directory: {$realPath}");
+                    }
+                } else {
+                    error_log("DELETE GRUPPO: path cartella non sicura, skip. ID=" . $id . " path=" . $basePath);
                 }
             }
             
-            sendSuccessResponse(['id' => $id], "Gruppo eliminato con successo");
+            sendSuccessResponse(array('id' => $id), "Gruppo eliminato con successo");
             break;
             
         default:
