@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Backup YourRadio: server Register -> server Aruba (rsync + mysqldump)
+# Backup YourRadio: server Register -> server Aruba (rsync mirror + mysqldump)
 #
-# Installazione Register:
-#   cp backup.env.example /etc/yourradio/backup.env && chmod 600 /etc/yourradio/backup.env
-#   cp register_to_aruba_backup.sh /usr/local/bin/yourradio-backup && chmod 750 /usr/local/bin/yourradio-backup
+# Modalità MIRROR: sempre le stesse cartelle su Aruba (solo differenze):
+#   $ARUBA_BASE/player/
+#   $ARUBA_BASE/httpdocs/
+#   $ARUBA_BASE/mysql/     (dump datati + symlink myradio.sql.gz)
 #
-# Cron (prima sync notturna, poi incrementale):
+# Cron:
 #   0 2 * * * /usr/local/bin/yourradio-backup >> /var/log/yourradio-backup/cron.log 2>&1
 #
 set -euo pipefail
@@ -61,7 +62,7 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backup_${STAMP}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-log "=== Avvio backup YourRadio -> Aruba ==="
+log "=== Avvio backup YourRadio -> Aruba (mirror) ==="
 log "Config: $CONFIG"
 log "Log: $LOG_FILE"
 
@@ -83,9 +84,7 @@ done
 : "${ARUBA_USER:?ARUBA_USER non impostato}"
 : "${ARUBA_BASE:?ARUBA_BASE non impostato}"
 
-# OpenSSH del Register è spesso vecchio (es. 6.7): "accept-new" non esiste (< 7.6).
-# Usa "yes" se l'host è già in known_hosts (consigliato dopo il primo login manuale).
-# Override in backup.env: SSH_STRICT_HOST_KEY=no  (solo se proprio necessario)
+# OpenSSH vecchio (Register): niente accept-new
 SSH_STRICT="${SSH_STRICT_HOST_KEY:-yes}"
 SSH_OPTS=(-o BatchMode=yes -o "StrictHostKeyChecking=${SSH_STRICT}" -p "${ARUBA_SSH_PORT:-22}")
 if [[ -n "${ARUBA_SSH_KEY:-}" && -f "$ARUBA_SSH_KEY" ]]; then
@@ -93,17 +92,13 @@ if [[ -n "${ARUBA_SSH_KEY:-}" && -f "$ARUBA_SSH_KEY" ]]; then
 fi
 
 RSYNC_SSH="ssh ${SSH_OPTS[*]}"
-# Default CONSERVATIVO: limita banda (KB/s). 0 = illimitato (pericoloso di giorno).
 RSYNC_BWLIMIT="${RSYNC_BWLIMIT:-5000}"
-# Solo OPZIONI (senza la parola "rsync" — altrimenti si raddoppia il comando)
 RSYNC_OPTS=(-aH --delete --numeric-ids --partial --human-readable)
-# --append-verify può dare problemi su rsync vecchi; partial basta per ripresa
 if [[ "${RSYNC_BWLIMIT}" != "0" ]]; then
   RSYNC_OPTS+=(--bwlimit="$RSYNC_BWLIMIT")
   log "rsync bwlimit: ${RSYNC_BWLIMIT} KB/s"
 fi
 
-# Priorità bassa CPU/IO
 NICE_BIN=()
 if command -v nice >/dev/null 2>&1; then
   NICE_BIN+=(nice -n "${BACKUP_NICE:-19}")
@@ -119,7 +114,7 @@ run_slow() {
   fi
 }
 
-# Wrapper rsync: exit 24 = file spariti durante il transfer (xml player) → OK
+# exit 24 = file vanished durante sync (xml player) → OK
 rsync_run() {
   local rc=0
   set +e
@@ -136,14 +131,18 @@ rsync_run() {
 }
 
 REMOTE="${ARUBA_USER}@${ARUBA_HOST}"
-REMOTE_TODAY="${ARUBA_BASE}/${DATE_TAG}"
-REMOTE_LATEST="${ARUBA_BASE}/latest"
+# Destinazione FISSA (mirror, non cartelle per data)
+DEST_PLAYER="${ARUBA_BASE}/player"
+DEST_HTTPDOCS="${ARUBA_BASE}/httpdocs"
+DEST_MYSQL="${ARUBA_BASE}/mysql"
+DEST_EXTRA="${ARUBA_BASE}/extra"
 
+log "Destinazione mirror: ${REMOTE}:${ARUBA_BASE}/{player,httpdocs,mysql}"
 log "Verifica connessione SSH verso $REMOTE ..."
-ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_TODAY'/player '$REMOTE_TODAY'/httpdocs '$REMOTE_TODAY'/mysql '$REMOTE_LATEST'" \
+ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEST_PLAYER' '$DEST_HTTPDOCS' '$DEST_MYSQL' '$DEST_EXTRA'" \
   || die "Impossibile connettersi o creare cartelle su Aruba"
 
-# --- MySQL dump (locale su Register) ---
+# --- MySQL dump ---
 DUMP_OK=0
 if [[ -n "${MYSQL_DATABASE:-}" ]]; then
   LOCAL_DUMP_DIR="/var/backups/yourradio/mysql"
@@ -178,63 +177,54 @@ if [[ -n "${MYSQL_DATABASE:-}" ]]; then
   log "Invio dump su Aruba ..."
   rsync_run \
     "$DUMP_FILE" \
-    "${REMOTE}:${REMOTE_TODAY}/mysql/" \
+    "${REMOTE}:${DEST_MYSQL}/" \
     || die "rsync dump fallito"
 
-  # symlink latest dump
   ssh "${SSH_OPTS[@]}" "$REMOTE" \
-    "ln -sfn '$REMOTE_TODAY/mysql/$(basename "$DUMP_FILE")' '$REMOTE_LATEST/myradio.sql.gz'" \
-    || log "WARN: symlink dump latest non creato"
+    "ln -sfn '$(basename "$DUMP_FILE")' '$DEST_MYSQL/myradio.sql.gz'" \
+    || log "WARN: symlink myradio.sql.gz non creato"
 else
   log "MYSQL_DATABASE non impostato: salto dump DB"
 fi
 
-# --- Player (priorità massima) ---
+# --- Player (mirror) ---
 PLAYER_RSYNCED=0
 if [[ -n "${SOURCE_PLAYER:-}" && -d "$SOURCE_PLAYER" ]]; then
-  log "rsync PLAYER: $SOURCE_PLAYER -> ${REMOTE}:${REMOTE_TODAY}/player/"
+  log "rsync PLAYER (mirror): $SOURCE_PLAYER -> ${REMOTE}:${DEST_PLAYER}/"
   rsync_run \
     "${SOURCE_PLAYER}/" \
-    "${REMOTE}:${REMOTE_TODAY}/player/" \
+    "${REMOTE}:${DEST_PLAYER}/" \
     || die "rsync player fallito"
   PLAYER_RSYNCED=1
-
-  ssh "${SSH_OPTS[@]}" "$REMOTE" \
-    "ln -sfn '$REMOTE_TODAY/player' '$REMOTE_LATEST/player'" \
-    || log "WARN: symlink player latest non creato"
 else
   die "SOURCE_PLAYER mancante o non esiste: ${SOURCE_PLAYER:-<vuoto>}"
 fi
 
-# --- httpdocs (escluso player, già copiato) ---
+# --- httpdocs (mirror, escluso player) ---
 HTTPDOCS_RSYNCED=0
 if [[ -n "${SOURCE_HTTPDOCS:-}" && -d "$SOURCE_HTTPDOCS" ]]; then
-  log "rsync HTTPDOCS: $SOURCE_HTTPDOCS -> ${REMOTE}:${REMOTE_TODAY}/httpdocs/"
+  log "rsync HTTPDOCS (mirror): $SOURCE_HTTPDOCS -> ${REMOTE}:${DEST_HTTPDOCS}/"
   rsync_run \
     --exclude 'player/' \
     --exclude 'cache/' \
     --exclude 'tmp/' \
     --exclude '.git/' \
     "${SOURCE_HTTPDOCS}/" \
-    "${REMOTE}:${REMOTE_TODAY}/httpdocs/" \
+    "${REMOTE}:${DEST_HTTPDOCS}/" \
     || die "rsync httpdocs fallito"
   HTTPDOCS_RSYNCED=1
-
-  ssh "${SSH_OPTS[@]}" "$REMOTE" \
-    "ln -sfn '$REMOTE_TODAY/httpdocs' '$REMOTE_LATEST/httpdocs'" \
-    || log "WARN: symlink httpdocs latest non creato"
 fi
 
-# --- Path extra opzionali ---
+# --- Path extra ---
 EXTRA_COUNT=0
 if [[ -n "${SOURCE_EXTRA_PATHS:-}" ]]; then
   for extra in $SOURCE_EXTRA_PATHS; do
     if [[ -d "$extra" ]]; then
       name="$(basename "$extra")"
-      log "rsync extra: $extra"
+      log "rsync extra (mirror): $extra"
       rsync_run \
         "${extra}/" \
-        "${REMOTE}:${REMOTE_TODAY}/extra/${name}/" \
+        "${REMOTE}:${DEST_EXTRA}/${name}/" \
         || log "WARN: rsync extra fallito per $extra"
       EXTRA_COUNT=$((EXTRA_COUNT + 1))
     else
@@ -243,25 +233,23 @@ if [[ -n "${SOURCE_EXTRA_PATHS:-}" ]]; then
   done
 fi
 
-# --- Retention dump locale Register ---
+# Retention dump SQL (locale Register + remoto Aruba)
 if [[ -d "/var/backups/yourradio/mysql" && "${RETENTION_DAYS:-0}" -gt 0 ]]; then
   find /var/backups/yourradio/mysql -name 'myradio_*.sql.gz' -mtime +"$RETENTION_DAYS" -delete || true
 fi
-
-# --- Retention snapshot giornalieri su Aruba (opzionale) ---
 if [[ "${RETENTION_DAYS:-0}" -gt 0 ]]; then
   ssh "${SSH_OPTS[@]}" "$REMOTE" \
-    "find '$ARUBA_BASE' -maxdepth 1 -mindepth 1 -type d -name '20*' -mtime +${RETENTION_DAYS} -exec rm -rf {} +" \
-    || log "WARN: retention Aruba non completata"
+    "find '$DEST_MYSQL' -maxdepth 1 -type f -name 'myradio_*.sql.gz' -mtime +${RETENTION_DAYS} -delete" \
+    || log "WARN: retention dump Aruba non completata"
 fi
 
 ELAPSED=$(( $(date +%s) - TODAY_START ))
-SUMMARY="Backup completato in ${ELAPSED}s
+SUMMARY="Backup MIRROR completato in ${ELAPSED}s
 Player: $([[ $PLAYER_RSYNCED -eq 1 ]] && echo OK || echo SKIP)
 Httpdocs: $([[ $HTTPDOCS_RSYNCED -eq 1 ]] && echo OK || echo SKIP)
 MySQL dump: $([[ $DUMP_OK -eq 1 ]] && echo OK || echo SKIP)
 Path extra: $EXTRA_COUNT
-Destinazione: ${REMOTE}:${REMOTE_TODAY}
+Destinazione: ${REMOTE}:${ARUBA_BASE}
 Log: $LOG_FILE"
 
 log "=== RIEPILOGO ==="
