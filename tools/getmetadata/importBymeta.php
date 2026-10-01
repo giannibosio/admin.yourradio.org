@@ -16,16 +16,16 @@ ini_set('max_execution_time', 0);
 $pageTitle = "Import Songs by Metadata";
 
 // Format da abbinare a ogni nuova song (tabella song_format)
-$newFormat = '81'; //COVER=3. AI POP=81
+$newFormat = '82'; //JAZZY HOUSE=82 COVER=3 AI POP=81
 
 // Fornitore: se "watermelon" usa sg_filename_wm (senza estensione), altrimenti sg_filename_origin
 $fornitore = '';
 
 // Limite track da metadata.json: 0 = tutti i tracks; N = solo i primi N (es. 5 per test)
-$limitTracks =1 ;
+$limitTracks =0 ;
 
 // Valore per il campo sg_diritti nelle nuove song (0 = Siae, 1 = Creative, 2 = Soundreef, 3 = Watermelon, 4 = YourRadio)
-$diritti = 4;
+$diritti = 0;
 
 // Percorsi cartelle (stesso stile di import_wm_songs)
 $filesDir = __DIR__ . '/files/';
