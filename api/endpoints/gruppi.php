@@ -16,33 +16,43 @@ function handleGruppiRequest($method, $action, $id, $data) {
         case 'GET':
             if ($id === null && $action === '') {
                 // Lista tutti i gruppi
-                $gruppi = Gruppi::selectAll();
-                $result = [];
-                foreach ($gruppi as $g) {
-                    $result[] = [
-                        'id' => (int)$g['gr_id'],
-                        'nome' => strtoupper($g['gr_nome']),
-                        'players' => (int)$g['tot_player'],
-                        'attivo' => (int)$g['gr_active']
-                    ];
+                try {
+                    $gruppi = Gruppi::selectAll();
+                    $result = array();
+                    foreach ($gruppi as $g) {
+                        $result[] = array(
+                            'id' => (int)$g['gr_id'],
+                            'nome' => strtoupper(isset($g['gr_nome']) ? $g['gr_nome'] : ''),
+                            'players' => (int)$g['tot_player'],
+                            'attivo' => (int)$g['gr_active']
+                        );
+                    }
+                    sendSuccessResponse($result);
+                } catch (Exception $e) {
+                    error_log("GET /api/gruppi ERROR: " . $e->getMessage());
+                    sendErrorResponse("Errore lista gruppi: " . $e->getMessage(), 500);
                 }
-                sendSuccessResponse($result);
             } elseif ($id !== null && $action === '') {
                 // Dettaglio gruppo
-                $gruppo = Gruppi::selectGruppoById($id);
-                if (empty($gruppo)) {
-                    sendErrorResponse("Gruppo non trovato", 404);
+                try {
+                    $gruppo = Gruppi::selectGruppoById($id);
+                    if (empty($gruppo)) {
+                        sendErrorResponse("Gruppo non trovato", 404);
+                    }
+                    $g = $gruppo[0];
+                    sendSuccessResponse(array(
+                        'id' => (int)$g['gr_id'],
+                        'nome' => strtoupper(isset($g['gr_nome']) ? $g['gr_nome'] : ''),
+                        'attivo' => (int)$g['gr_active'],
+                        'data_creazione' => $g['gr_dataCreazione'],
+                        'rss_id' => !empty($g['rss_id']) ? (int)$g['rss_id'] : null,
+                        'rss_nome' => isset($g['rss_nome']) ? $g['rss_nome'] : null,
+                        'tot_player' => (int)$g['tot_player']
+                    ));
+                } catch (Exception $e) {
+                    error_log("GET /api/gruppi/" . $id . " ERROR: " . $e->getMessage());
+                    sendErrorResponse("Errore dettaglio gruppo: " . $e->getMessage(), 500);
                 }
-                $g = $gruppo[0];
-                sendSuccessResponse([
-                    'id' => (int)$g['gr_id'],
-                    'nome' => strtoupper($g['gr_nome']),
-                    'attivo' => (int)$g['gr_active'],
-                    'data_creazione' => $g['gr_dataCreazione'],
-                    'rss_id' => $g['rss_id'] ? (int)$g['rss_id'] : null,
-                    'rss_nome' => isset($g['rss_nome']) ? $g['rss_nome'] : null,
-                    'tot_player' => (int)$g['tot_player']
-                ]);
             } elseif ($id !== null && $action === 'players') {
                 // Lista players del gruppo
                 $players = Gruppi::selectAllPlayersGruppoById($id);

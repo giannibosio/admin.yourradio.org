@@ -82,8 +82,20 @@ $requestData = getRequestData();
 try {
     switch ($endpoint) {
         case 'gruppi':
-            require_once __DIR__ . '/endpoints/gruppi.php';
-            handleGruppiRequest($requestMethod, $action, $id, $requestData);
+            try {
+                $gruppiEndpoint = __DIR__ . '/endpoints/gruppi.php';
+                if (!is_file($gruppiEndpoint)) {
+                    sendErrorResponse("File endpoint gruppi.php mancante sul server", 500, 'MISSING_ENDPOINT');
+                }
+                require_once $gruppiEndpoint;
+                if (!function_exists('handleGruppiRequest')) {
+                    sendErrorResponse("handleGruppiRequest non definita", 500, 'MISSING_HANDLER');
+                }
+                handleGruppiRequest($requestMethod, $action, $id, $requestData);
+            } catch (Exception $e) {
+                error_log("API GRUPPI ERROR: " . $e->getMessage());
+                sendErrorResponse("Errore gruppi: " . $e->getMessage(), 500, 'GRUPPI_ERROR');
+            }
             break;
             
         case 'songs':

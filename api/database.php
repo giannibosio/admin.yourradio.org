@@ -729,26 +729,36 @@ class Gruppi extends DB
 
     public static function selectAll()
     {
-        $query = "SELECT gr.gr_id, gr.gr_active, gr.gr_nome, COUNT(pl.pl_id) as tot_player 
-                  FROM players AS pl 
-                  RIGHT JOIN gruppi AS gr ON(pl.pl_idGruppo=gr.gr_id) 
-                  WHERE gr.gr_id>0 AND gr.gr_nome<>'' 
-                  GROUP BY gr.gr_nome 
+        // Query compatibile MySQL strict / ONLY_FULL_GROUP_BY
+        $query = "SELECT gr.gr_id, gr.gr_active, gr.gr_nome,
+                         (SELECT COUNT(*) FROM players pl WHERE pl.pl_idGruppo = gr.gr_id) AS tot_player
+                  FROM gruppi AS gr
+                  WHERE gr.gr_id > 0 AND gr.gr_nome <> ''
                   ORDER BY gr.gr_nome ASC";
         $st = self::$db->prepare($query);
+        if (!$st) {
+            $err = self::$db->errorInfo();
+            throw new Exception("selectAll prepare failed: " . (isset($err[2]) ? $err[2] : 'unknown'));
+        }
         $st->execute();
         return $st->fetchAll();
     }
 
     public static function selectGruppoById($id)
     {
-        $query = "SELECT gr.gr_id, gr.gr_active, gr.gr_nome, gr.gr_dataCreazione, rss.rss_id, rss.rss_nome, COUNT(pl.pl_id) as tot_player 
-                  FROM players AS pl 
-                  LEFT JOIN gruppi AS gr ON(pl.pl_idGruppo=gr.gr_id) 
-                  LEFT JOIN rss as rss ON(gr.gr_ds_rss=rss.rss_id)
-                  WHERE gr.gr_id=:id";
+        $query = "SELECT gr.gr_id, gr.gr_active, gr.gr_nome, gr.gr_dataCreazione,
+                         rss.rss_id, rss.rss_nome,
+                         (SELECT COUNT(*) FROM players pl WHERE pl.pl_idGruppo = gr.gr_id) AS tot_player
+                  FROM gruppi AS gr
+                  LEFT JOIN rss AS rss ON (gr.gr_ds_rss = rss.rss_id)
+                  WHERE gr.gr_id = :id
+                  LIMIT 1";
         $st = self::$db->prepare($query);
-        $st->execute([':id' => $id]);
+        if (!$st) {
+            $err = self::$db->errorInfo();
+            throw new Exception("selectGruppoById prepare failed: " . (isset($err[2]) ? $err[2] : 'unknown'));
+        }
+        $st->execute(array(':id' => $id));
         return $st->fetchAll();
     }
 

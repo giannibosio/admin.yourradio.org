@@ -16,7 +16,7 @@ ini_set('max_execution_time', 0);
 $pageTitle = "Import Songs by Metadata";
 
 // Format da abbinare a ogni nuova song (tabella song_format)
-$newFormat = '82'; //JAZZY HOUSE=82 COVER=3 AI POP=81
+$newFormat = '81'; //JAZZY HOUSE=82 COVER=3 AI POP=81
 
 // Fornitore: se "watermelon" usa sg_filename_wm (senza estensione), altrimenti sg_filename_origin
 $fornitore = '';
